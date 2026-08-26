@@ -2,8 +2,14 @@
    Store — API client (talks to Express backend)
    ============================================ */
 
+// Configuración de Supabase
+const SUPABASE_URL = 'https://nhjmpulzxfpezlseqrtj.supabase.co';
+const SUPABASE_ANON_KEY = 'xexoanaL1__';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const Store = (() => {
   const API = '/api';
+  const supabase = supabaseClient; // acceso interno al cliente Supabase
 
   // ---- Generic fetch helper ----
   async function _get(url) {
@@ -265,6 +271,50 @@ const Store = (() => {
     return ['Ficción', 'Ciencia', 'Historia', 'Educación', 'Tecnología', 'Arte', 'Filosofía'];
   }
 
+  // ---- Supabase Auth ----
+  async function supabaseLogin(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  async function supabaseRegister(email, password) {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  async function supabaseLogout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(error.message);
+  }
+
+  async function supabaseGetUser() {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) throw new Error(error.message);
+    return user;
+  }
+
+  // ---- Supabase Storage ----
+  async function uploadBookFile(file) {
+    const filePath = `libros/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage
+      .from('documentos')
+      .upload(filePath, file);
+    if (error) throw error;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(filePath);
+    return publicUrlData.publicUrl;
+  }
+
   return {
     registerUser,
     loginUser,
@@ -298,5 +348,11 @@ const Store = (() => {
     adminDeleteUser,
     adminDeleteBook,
     adminSetUserRole,
+    // Supabase helpers
+    supabaseLogin,
+    supabaseRegister,
+    supabaseLogout,
+    supabaseGetUser,
+    uploadBookFile,
   };
 })();
