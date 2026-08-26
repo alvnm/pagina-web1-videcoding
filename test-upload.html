@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test — Subir archivo a Supabase Storage</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .card { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 500px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+    h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    label { display: block; font-size: .875rem; color: #94a3b8; margin-bottom: .5rem; }
+    input[type="file"] { width: 100%; padding: .75rem; background: #334155; border: 1px solid #475569; border-radius: 8px; color: #e2e8f0; cursor: pointer; }
+    button { margin-top: 1rem; width: 100%; padding: .75rem; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #818cf8; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status { margin-top: 1rem; padding: 1rem; border-radius: 8px; font-size: .875rem; display: none; word-break: break-all; }
+    #status.success { display: block; background: #064e3b; border: 1px solid #10b981; color: #6ee7b7; }
+    #status.error { display: block; background: #7f1d1d; border: 1px solid #ef4444; color: #fca5a5; }
+    #status.info { display: block; background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; }
+    a { color: #818cf8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>📤 Test de Subida — Supabase Storage</h1>
+    <label for="file-input">Selecciona un archivo para subir al bucket <strong>documentos</strong>:</label>
+    <input type="file" id="file-input" accept=".pdf,.epub,.jpg,.jpeg,.png" />
+    <button id="upload-btn" disabled>Subir archivo</button>
+    <div id="status"></div>
+  </div>
+
+  <!-- CDN de Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ⚠️ Reemplaza estos valores con tus credenciales reales de Supabase
+    const SUPABASE_URL = 'https://nhjmpulzxfpezlseqrtj.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_FCfSaP3eX3XmLFD525J-Vw_pUibeo53';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const fileInput = document.getElementById('file-input');
+    const uploadBtn = document.getElementById('upload-btn');
+    const status = document.getElementById('status');
+
+    fileInput.addEventListener('change', () => {
+      uploadBtn.disabled = fileInput.files.length === 0;
+      status.style.display = 'none';
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Subiendo...';
+      showStatus('Subiendo ' + file.name + '...', 'info');
+
+      try {
+        const filePath = `libros/${Date.now()}_${file.name}`;
+
+        // Subir archivo
+        const { data, error } = await supabase.storage
+          .from('documentos')
+          .upload(filePath, file);
+
+        if (error) throw error;
+
+        // Obtener URL pública
+        const { data: urlData } = supabase.storage
+          .from('documentos')
+          .getPublicUrl(filePath);
+
+        showStatus(
+          '✅ ¡Subida exitosa!<br><br>' +
+          '<strong>Archivo:</strong> ' + file.name + '<br>' +
+          '<strong>Tamaño:</strong> ' + (file.size / 1024).toFixed(1) + ' KB<br>' +
+          '<strong>Ruta:</strong> ' + filePath + '<br><br>' +
+          '<strong>URL pública:</strong><br><a href="' + urlData.publicUrl + '" target="_blank">' + urlData.publicUrl + '</a>',
+          'success'
+        );
+      } catch (err) {
+        showStatus('❌ Error: ' + err.message, 'error');
+      }
+
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Subir archivo';
+    });
+
+    function showStatus(msg, type) {
+      status.innerHTML = msg;
+      status.className = type;
+    }
+  </script>
+</body>
+</html>

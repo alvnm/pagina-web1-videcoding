@@ -4,7 +4,7 @@
 
 // Configuración de Supabase
 const SUPABASE_URL = 'https://nhjmpulzxfpezlseqrtj.supabase.co';
-const SUPABASE_ANON_KEY = 'xexoanaL1__';
+const SUPABASE_ANON_KEY = 'sb_publishable_FCfSaP3eX3XmLFD525J-Vw_pUibeo53';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const Store = (() => {
