@@ -33,6 +33,11 @@ app.use(session({
   },
 }));
 
+// ---- Health check (must be before catch-all) ----
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, timestamp: new Date().toISOString() });
+});
+
 // ---- API Routes ----
 app.use('/api/auth',   require('./routes/auth'));
 app.use('/api/books',  require('./routes/books'));
@@ -42,11 +47,6 @@ app.use('/api/admin',  require('./routes/admin'));
 // ---- API catch-all (all methods) ----
 app.all('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint no encontrado.' });
-});
-
-// ---- Health check ----
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
 // ---- Error handler ----
