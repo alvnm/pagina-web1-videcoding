@@ -330,6 +330,36 @@ const Store = (() => {
     return user;
   }
 
+  // ---- Cover Auto-generation ----
+  async function searchCovers(title, author) {
+    const params = new URLSearchParams({ title });
+    if (author) params.set('author', author);
+    const data = await _get('/books/auto-cover-search?' + params.toString());
+    return data.covers || [];
+  }
+
+  async function autoGenerateCover(bookId) {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId + '/auto-cover', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const data = await _parseResponse(res);
+    if (!res.ok) throw new Error(data.error || 'Error al generar portada');
+    return data;
+  }
+
+  async function batchAutoCover(bookIds) {
+    const res = await _fetchWithTimeout(API + '/books/auto-cover', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_ids: bookIds || [] }),
+    });
+    const data = await _parseResponse(res);
+    if (!res.ok) throw new Error(data.error || 'Error al generar portadas');
+    return data;
+  }
+
   // ---- Supabase Storage ----
   async function uploadBookFile(file) {
     const filePath = `libros/${Date.now()}_${file.name}`;
@@ -378,6 +408,10 @@ const Store = (() => {
     adminDeleteUser,
     adminDeleteBook,
     adminSetUserRole,
+    // Cover helpers
+    searchCovers,
+    autoGenerateCover,
+    batchAutoCover,
     // Supabase helpers
     supabaseLogin,
     supabaseRegister,

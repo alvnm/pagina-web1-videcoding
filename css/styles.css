@@ -2885,3 +2885,80 @@ body.dark-mode .cover-current-placeholder {
     height: 80px;
   }
 }
+
+/* Cover Suggestions Grid */
+.cover-suggestion-section {
+  margin-top: 0.75rem;
+}
+
+.cover-suggestions-grid {
+  margin-top: 0.75rem;
+}
+
+.cover-suggestions-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.cover-suggestion-item {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid var(--color-border-light);
+  transition: all var(--transition);
+  background: var(--color-surface);
+}
+
+.cover-suggestion-item:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--color-shadow-hover);
+}
+
+.cover-suggestion-item.selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(255, 143, 0, 0.25);
+}
+
+.cover-suggestion-img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-suggestion-info {
+  padding: 0.5rem;
+}
+
+.cover-suggestion-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cover-suggestion-author {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dark mode for cover suggestions */
+body.dark-mode .cover-suggestion-item {
+  background: #1a1210;
+  border-color: #3a2a1a;
+}
+
+body.dark-mode .cover-suggestion-item:hover {
+  border-color: #8d6e63;
+}
+
+body.dark-mode .cover-suggestion-item.selected {
+  border-color: var(--color-accent);
+}

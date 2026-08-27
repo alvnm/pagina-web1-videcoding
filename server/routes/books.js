@@ -10,6 +10,7 @@ const https = require('https');
 const http = require('http');
 const Store = require('../db');
 const { generateCoverFromPDF } = require('../cover-generator');
+const coverService = require('../cover-service');
 
 // Helper: proxy a remote URL and pipe to response
 function proxyUrl(url, res, disposition) {
@@ -125,6 +126,75 @@ function requireAuth(req, res, next) {
 
 // ---- Routes (specific routes FIRST, then parameterized) ----
 
+// GET /api/books/auto-cover-search — search covers from Open Library (must be before /:id)
+router.get('/auto-cover-search', async (req, res) => {
+  try {
+    const { title, author } = req.query;
+    if (!title) {
+      return res.status(400).json({ error: 'Se requiere al menos un título.' });
+    }
+    const covers = await coverService.searchCovers(title, author || '', 6);
+    res.json({ covers });
+  } catch (err) {
+    console.error('❌ auto-cover-search error:', err.message);
+    res.status(500).json({ error: 'Error al buscar portadas.' });
+  }
+});
+
+// POST /api/books/auto-cover — generate covers for books without cover (admin) (must be before /:id)
+router.post('/auto-cover', requireAuth, async (req, res) => {
+  try {
+    const { book_ids } = req.body; // optional: specific book IDs to process
+    const admin = await Store.isAdmin(req.session.user.id);
+    if (!admin && (!book_ids || book_ids.length === 0)) {
+      return res.status(403).json({ error: 'Solo los administradores pueden generar portadas masivamente.' });
+    }
+
+    let booksToProcess;
+    if (book_ids && book_ids.length > 0) {
+      // Process specific books
+      booksToProcess = [];
+      for (const id of book_ids) {
+        const book = await Store.bookById(id);
+        if (book) booksToProcess.push(book);
+      }
+    } else {
+      // Process all books without cover
+      const allBooks = await Store.allBooks();
+      booksToProcess = allBooks.filter(b => !b.cover_url || b.cover_url === '');
+    }
+
+    let generated = 0;
+    let skipped = 0;
+    let errors = 0;
+    const results = [];
+
+    for (const book of booksToProcess) {
+      try {
+        const coverUrl = await coverService.autoGenerateCover(
+          book.title, book.author, book.category, book.id
+        );
+        if (coverUrl) {
+          await Store.updateBook(book.id, req.session.user.id, { cover_url: coverUrl });
+          generated++;
+          results.push({ book_id: book.id, title: book.title, cover_url: coverUrl, status: 'generated' });
+        } else {
+          skipped++;
+          results.push({ book_id: book.id, title: book.title, status: 'skipped' });
+        }
+      } catch (err) {
+        errors++;
+        results.push({ book_id: book.id, title: book.title, status: 'error', error: err.message });
+      }
+    }
+
+    res.json({ generated, skipped, errors, total: booksToProcess.length, results });
+  } catch (err) {
+    console.error('❌ auto-cover error:', err.message);
+    res.status(500).json({ error: 'Error al generar portadas.' });
+  }
+});
+
 // GET /api/books/most-downloaded  (must be before /:id)
 router.get('/most-downloaded', async (req, res) => {
   try {
@@ -211,6 +281,36 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('❌ search error:', err.message);
     res.status(500).json({ error: 'Error al buscar libros.' });
+  }
+});
+
+// POST /api/books/:id/auto-cover — auto-generate cover for a specific book
+router.post('/:id/auto-cover', requireAuth, async (req, res) => {
+  try {
+    const book = await Store.bookById(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
+
+    // Only owner or admin can generate cover
+    const isAdmin = await Store.isAdmin(req.session.user.id);
+    if (book.user_id !== req.session.user.id && !isAdmin) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este documento.' });
+    }
+
+    const coverUrl = await coverService.autoGenerateCover(
+      book.title, book.author, book.category, book.id
+    );
+
+    if (!coverUrl) {
+      return res.status(404).json({ error: 'No se pudo generar una portada.' });
+    }
+
+    // Update book with new cover
+    const result = await Store.updateBook(book.id, req.session.user.id, { cover_url: coverUrl });
+
+    res.json({ cover_url: coverUrl, book: result });
+  } catch (err) {
+    console.error('❌ auto-cover single error:', err.message);
+    res.status(500).json({ error: 'Error al generar portada.' });
   }
 });
 
@@ -349,22 +449,43 @@ router.post('/', requireAuth, (req, res, next) => {
       bookCoverUrl = '/uploads/' + coverFile.filename;
     }
 
-    // If no cover provided, try to generate from PDF first page
-    if (!bookCoverUrl && bookFileUrl) {
+    // If no cover provided, try auto-generation (Open Library → PDF → Placeholder)
+    if (!bookCoverUrl) {
+      // 1. Try Open Library API first (fast, no system deps)
       try {
-        const filePath = bookFileUrl.startsWith('http') ? null : path.join(__dirname, '..', bookFileUrl);
-        if (filePath && fs.existsSync(filePath)) {
-          const ext = path.extname(filePath).toLowerCase();
-          if (ext === '.pdf') {
-            const coverPath = await generateCoverFromPDF(filePath);
-            if (coverPath) {
-              bookCoverUrl = coverPath;
+        const olCover = await coverService.searchOpenLibraryCover(title, author);
+        if (olCover) {
+          bookCoverUrl = olCover;
+          console.log('📚 Auto-fetched cover from Open Library for:', title);
+        }
+      } catch (olErr) {
+        console.error('⚠️ Open Library cover search failed:', olErr.message);
+      }
+
+      // 2. If still no cover and file is local PDF, try PDF extraction
+      if (!bookCoverUrl && bookFileUrl && !bookFileUrl.startsWith('http')) {
+        try {
+          const filePath = path.join(__dirname, '..', bookFileUrl);
+          if (fs.existsSync(filePath)) {
+            const ext = path.extname(filePath).toLowerCase();
+            if (ext === '.pdf') {
+              const coverPath = await generateCoverFromPDF(filePath);
+              if (coverPath) {
+                bookCoverUrl = coverPath;
+                console.log('🖼️ Generated cover from PDF for:', title);
+              }
             }
           }
+        } catch (coverErr) {
+          console.error('⚠️ Could not generate cover from PDF:', coverErr.message);
         }
-      } catch (coverErr) {
-        console.error('⚠️ Could not generate cover from PDF:', coverErr.message);
-        // Continue without cover - not a critical error
+      }
+
+      // 3. Final fallback: generate a placeholder SVG
+      if (!bookCoverUrl) {
+        const placeholder = coverService.savePlaceholderCover(title, author, category, 'pending');
+        bookCoverUrl = placeholder;
+        console.log('🎨 Generated placeholder cover for:', title);
       }
     }
 

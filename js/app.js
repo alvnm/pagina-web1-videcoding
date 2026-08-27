@@ -772,14 +772,24 @@ const App = (() => {
       }
     }
 
+    // Step 2b: Use selected cover from Open Library if no file cover was uploaded
+    if (!coverUrl && _selectedCoverUrl) {
+      coverUrl = _selectedCoverUrl;
+      Components.showToast('🖼️ Usando portada de Open Library', 'info');
+    }
+
     // Step 3: Create book record with file URL and cover URL
+    // If no cover at all, the server will auto-generate (Open Library → PDF → Placeholder)
     try {
+      Components.showToast('📚 Guardando documento...', 'info');
       const { book } = await Store.addBookJSON({
         title, author, category, description,
         tags: _currentTags,
         file_url: fileUrl,
         cover_url: coverUrl,
       });
+      // Reset selected cover
+      _selectedCoverUrl = '';
       Components.showToast('¡Documento subido exitosamente! 🎉', 'success');
       Router.navigate('/book/' + book.id);
     } catch (err) {
@@ -1369,6 +1379,109 @@ const App = (() => {
     }
   }
 
+  // ---- Cover Auto-generation ----
+  async function searchCoverSuggestions() {
+    const titleInput = document.getElementById('book-title');
+    const authorInput = document.getElementById('book-author');
+    const suggestionsEl = document.getElementById('cover-suggestions');
+    const searchBtn = document.getElementById('search-cover-btn');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    const author = authorInput ? authorInput.value.trim() : '';
+
+    if (!title) {
+      Components.showToast('Ingresa el título primero para buscar portadas.', 'error');
+      return;
+    }
+
+    if (searchBtn) {
+      searchBtn.disabled = true;
+      searchBtn.textContent = '🔍 Buscando...';
+    }
+    if (suggestionsEl) {
+      suggestionsEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--color-text-muted);">🔍 Buscando portadas en Open Library...</div>';
+    }
+
+    try {
+      const covers = await Store.searchCovers(title, author);
+      if (!suggestionsEl) return;
+
+      if (covers.length === 0) {
+        suggestionsEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--color-text-muted);">No se encontraron portadas. Se generará automáticamente al subir.</div>';
+        return;
+      }
+
+      suggestionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:0.5rem;">Haz clic en una portada para usarla:</p>' +
+        '<div class="cover-suggestions-grid-inner">' +
+        covers.map((c, i) => `
+          <div class="cover-suggestion-item" onclick="App.selectCoverSuggestion('${escapeAttr(c.url)}', ${i})" title="${escapeAttr(c.title)} por ${escapeAttr(c.author)}${c.year ? ' (' + c.year + ')' : ''}">
+            <img src="${escapeAttr(c.url)}" alt="Portada sugerida ${i + 1}" class="cover-suggestion-img" loading="lazy" />
+            <div class="cover-suggestion-info">
+              <div class="cover-suggestion-title">${escapeHtml(c.title)}</div>
+              <div class="cover-suggestion-author">${escapeHtml(c.author)}${c.year ? ' · ' + c.year : ''}</div>
+            </div>
+          </div>
+        `).join('') +
+        '</div>';
+    } catch (err) {
+      if (suggestionsEl) {
+        suggestionsEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--color-error);">Error al buscar portadas: ' + err.message + '</div>';
+      }
+    } finally {
+      if (searchBtn) {
+        searchBtn.disabled = false;
+        searchBtn.textContent = '🔍 Buscar portada automáticamente';
+      }
+    }
+  }
+
+  function selectCoverSuggestion(url, index) {
+    // Store the selected cover URL in a hidden input or global variable
+    _selectedCoverUrl = url;
+
+    // Update the cover preview
+    const preview = document.getElementById('cover-preview');
+    if (preview) {
+      preview.innerHTML = `
+        <div class="cover-preview">
+          <img src="${escapeAttr(url)}" alt="Portada seleccionada" class="cover-preview-img" />
+          <div class="cover-preview-info">
+            <div class="cover-preview-name">Portada seleccionada de Open Library</div>
+          </div>
+          <button class="cover-preview-remove" type="button" onclick="App.clearCover()">✕ Quitar</button>
+        </div>
+      `;
+    }
+
+    // Highlight selected suggestion
+    document.querySelectorAll('.cover-suggestion-item').forEach((el, i) => {
+      el.classList.toggle('selected', i === index);
+    });
+
+    Components.showToast('Portada seleccionada ✅', 'success');
+  }
+
+  // Global variable to store selected cover URL
+  let _selectedCoverUrl = '';
+
+  async function autoGenerateCover(bookId) {
+    if (!confirm('¿Generar una portada automáticamente para este documento?')) return;
+
+    try {
+      Components.showToast('🖼️ Generando portada...', 'info');
+      const result = await Store.autoGenerateCover(bookId);
+      if (result && result.cover_url) {
+        Components.showToast('✅ Portada generada correctamente', 'success');
+        // Reload the page to show the new cover
+        _bookDetailPage({ id: bookId });
+      } else {
+        Components.showToast('No se pudo generar la portada.', 'error');
+      }
+    } catch (err) {
+      Components.showToast('Error al generar portada: ' + err.message, 'error');
+    }
+  }
+
   return {
     init,
     handleAuth,
@@ -1402,6 +1515,9 @@ const App = (() => {
     confirmDeleteBook,
     handleProfileEdit,
     handleEditBook,
+    searchCoverSuggestions,
+    selectCoverSuggestion,
+    autoGenerateCover,
   };
 })();
 

@@ -685,10 +685,20 @@ const Components = (() => {
             <div class="cover-upload-zone" id="cover-drop-zone" onclick="document.getElementById('cover-input').click()">
               <div class="cover-upload-icon">🖼️</div>
               <p class="cover-upload-text">Selecciona una imagen para la portada</p>
-              <p class="cover-upload-formats">Formatos: JPG, PNG, WebP (máx. 5 MB). Si no seleccionas ninguna, se usará la primera página del PDF.</p>
+              <p class="cover-upload-formats">Formatos: JPG, PNG, WebP (máx. 5 MB)</p>
             </div>
             <input type="file" id="cover-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" />
             <div id="cover-preview"></div>
+            <div class="cover-suggestion-section">
+              <button type="button" class="btn btn-secondary btn-sm" id="search-cover-btn" onclick="App.searchCoverSuggestions()" style="margin-top:0.5rem;">
+                🔍 Buscar portada automáticamente
+              </button>
+              <p class="form-hint">Busca la portada en Open Library según título y autor</p>
+              <div id="cover-suggestions" class="cover-suggestions-grid"></div>
+            </div>
+            <div class="auto-cover-hint" style="margin-top:0.5rem;padding:0.75rem;background:var(--color-surface-alt);border-radius:var(--radius-sm);border:1px dashed var(--color-border);">
+              <p style="font-size:0.85rem;color:var(--color-text-secondary);margin:0;">💡 <strong>Sin portada:</strong> Se generará automáticamente una portada con el título y autor del libro.</p>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Título <span class="required">*</span></label>
@@ -748,6 +758,9 @@ const Components = (() => {
         <div class="detail-owner-actions">
           <a href="#/book/${book.id}/edit" class="btn btn-secondary btn-sm">✏️ Editar</a>
           <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteBook('${book.id}', '${escapeAttr(book.title)}')">🗑️ Eliminar</button>
+          ${!book.cover_url || book.cover_url === '' ? 
+            `<button class="btn btn-secondary btn-sm" onclick="App.autoGenerateCover('${book.id}')" title="Generar portada automáticamente">🖼️ Generar Portada</button>` : ''
+          }
         </div>
       `;
     }
