@@ -219,8 +219,8 @@ router.post('/', requireAuth, (req, res, next) => {
   }
 });
 
-// POST /api/books/:id/download
-router.post('/:id/download', async (req, res) => {
+// GET & POST /api/books/:id/download
+router.all('/:id/download', async (req, res) => {
   try {
     const book = await Store.bookById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
@@ -232,7 +232,12 @@ router.post('/:id/download', async (req, res) => {
       await Store.addReadingHistory(req.session.user.id, req.params.id);
     }
 
-    // If the file exists on disk, serve it; otherwise just count the download
+    // If file_url is an external URL (Supabase Storage), redirect to it
+    if (book.file_url && book.file_url.startsWith('http')) {
+      return res.redirect(book.file_url);
+    }
+
+    // If the file exists on disk, serve it
     if (book.file_url) {
       const filePath = path.join(__dirname, '..', book.file_url);
       if (fs.existsSync(filePath)) {
@@ -240,7 +245,8 @@ router.post('/:id/download', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, downloads });
+    // No file available — return JSON so client can handle it
+    res.json({ ok: true, downloads, file_url: book.file_url || null });
   } catch (err) {
     console.error('❌ download error:', err.message);
     res.status(500).json({ error: 'Error al descargar.' });

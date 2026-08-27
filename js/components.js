@@ -670,7 +670,8 @@ const Components = (() => {
     ).join('');
 
     const uploaderName = book.uploader_name || 'Desconocido';
-    const isOwner = session && session.id === book.uploader_id;
+    const ownerId = book.user_id || book.uploader_id;
+    const isOwner = session && String(session.id) === String(ownerId);
 
     // Rating stars
     const rating = book.rating || { average: 0, count: 0, distribution: {} };
@@ -729,9 +730,16 @@ const Components = (() => {
             <div class="detail-description">${escapeHtml(book.description)}</div>
             ${tagsHtml ? `<div class="detail-tags">${tagsHtml}</div>` : ''}
             <div class="detail-actions">
-              <a href="/api/books/${book.id}/download" class="btn btn-primary btn-lg" onclick="App.onDownloadClick(event, ${book.id})">
-                ⬇️ Descargar
-              </a>
+              ${book.file_url ? `
+                <a href="/api/books/${book.id}/download" class="btn btn-primary btn-lg" onclick="event.preventDefault();App.downloadBook(${book.id})">
+                  ⬇️ Descargar
+                </a>
+              ` : ''}
+              ${book.file_url ? `
+                <button class="btn btn-accent btn-lg" onclick="App.viewBook('${book.file_url.replace(/'/g, "\\'")}')">
+                  📖 Leer
+                </button>
+              ` : ''}
               ${favBtn}
               ${shareBtn}
             </div>
@@ -740,7 +748,7 @@ const Components = (() => {
               <div class="user-avatar">${getInitials(uploaderName)}</div>
               <div>
                 <div class="detail-uploader-text">Subido por</div>
-                <div class="detail-uploader-name" style="cursor:pointer;" onclick="Router.navigate('/profile/${book.uploader_id}')">${escapeHtml(uploaderName)}</div>
+                <div class="detail-uploader-name" style="cursor:pointer;" onclick="Router.navigate('/profile/${ownerId}')">${escapeHtml(uploaderName)}</div>
               </div>
             </div>
           </div>

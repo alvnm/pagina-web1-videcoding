@@ -171,10 +171,23 @@ const App = (() => {
     }
   }
 
-  function onDownloadClick(e, bookId) {
-    // Track download
-    Store.incrementDownload(bookId).catch(() => {});
-    // Let the browser follow the link to /api/books/:id/download
+  async function downloadBook(bookId) {
+    try {
+      Components.showToast('⬇️ Descargando...', 'info');
+      // The server redirects to the file URL (Supabase Storage or local)
+      window.location.href = '/api/books/' + bookId + '/download';
+    } catch (err) {
+      Components.showToast('Error al descargar: ' + err.message, 'error');
+    }
+  }
+
+  function viewBook(fileUrl) {
+    if (!fileUrl) {
+      Components.showToast('No hay archivo disponible para leer.', 'error');
+      return;
+    }
+    // Open the file in a new tab (works for PDFs and other browser-renderable formats)
+    window.open(fileUrl, '_blank');
   }
 
   function shareBook(bookId, title) {
@@ -899,7 +912,7 @@ const App = (() => {
         Router.navigate('/');
         return;
       }
-      if (book.uploader_id !== _session.id) {
+      if (String(book.user_id) !== String(_session.id)) {
         Components.showToast('No tienes permiso para editar este documento.', 'error');
         Router.navigate('/book/' + params.id);
         return;
@@ -1055,7 +1068,8 @@ const App = (() => {
     deleteComment,
     goToCommentPage,
     rateBook,
-    onDownloadClick,
+    downloadBook,
+    viewBook,
     shareBook,
     confirmDeleteBook,
     handleProfileEdit,
