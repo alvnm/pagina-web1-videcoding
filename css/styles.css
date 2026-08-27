@@ -1106,6 +1106,7 @@ select {
     padding: 1rem;
     border-bottom: 1px solid var(--color-border-light);
     box-shadow: 0 4px 12px var(--color-shadow);
+    z-index: 200;
   }
 
   .navbar-nav.open {
@@ -1115,8 +1116,31 @@ select {
   .navbar-nav a {
     width: 100%;
     padding: 0.75rem 1rem;
+    min-height: 44px;
   }
 
+  /* Navbar actions: wrap and shrink on mobile */
+  .navbar-actions {
+    gap: 0.4rem;
+  }
+
+  .navbar-search {
+    display: none;
+  }
+
+  .dark-toggle {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.8rem;
+  }
+
+  /* Hero */
   .hero {
     padding: 2.5rem 0;
   }
@@ -1125,30 +1149,21 @@ select {
     font-size: 1.8rem;
   }
 
-  .books-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1rem;
+  .hero p {
+    font-size: 1rem;
   }
 
-  .book-card-cover {
-    height: 150px;
-  }
-
-  .detail-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-cover {
-    max-width: 200px;
-    margin: 0 auto;
-    position: static;
-  }
-
-  .profile-header {
+  .hero-actions {
     flex-direction: column;
-    text-align: center;
+    align-items: center;
   }
 
+  .hero .btn {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  /* Search bar */
   .search-form {
     flex-direction: column;
   }
@@ -1161,10 +1176,145 @@ select {
     width: 100%;
   }
 
+  .search-bar {
+    padding: 1rem 0;
+  }
+
+  /* Book grid */
+  .books-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .book-card-cover {
+    height: 150px;
+  }
+
+  .book-card-body {
+    padding: 0.75rem;
+  }
+
+  .book-card-title {
+    font-size: 0.9rem;
+  }
+
+  .book-card-author {
+    font-size: 0.8rem;
+  }
+
+  /* Detail page */
+  .detail-layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .detail-cover {
+    max-width: 220px;
+    margin: 0 auto;
+    position: static;
+  }
+
+  .detail-info h1 {
+    font-size: 1.5rem;
+  }
+
+  .detail-actions {
+    flex-direction: column;
+  }
+
+  .detail-actions .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .detail-owner-actions {
+    flex-direction: column;
+  }
+
+  .detail-owner-actions .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .detail-tags {
+    gap: 0.3rem;
+  }
+
+  .detail-meta {
+    gap: 0.5rem;
+  }
+
+  .detail-description {
+    padding: 1rem;
+  }
+
+  .detail-rating {
+    padding: 1rem;
+  }
+
+  .rating-display {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rating-interactive {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Upload form */
   .upload-form {
     padding: 1.25rem;
   }
 
+  .drop-zone {
+    padding: 1.5rem;
+  }
+
+  .drop-zone-icon {
+    font-size: 2rem;
+  }
+
+  /* Profile */
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.5rem;
+  }
+
+  .profile-info h2 {
+    font-size: 1.3rem;
+  }
+
+  .profile-stats {
+    justify-content: center;
+  }
+
+  /* Categories */
+  .categories-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .category-card {
+    padding: 1.25rem 1rem;
+  }
+
+  .category-card-icon {
+    font-size: 2rem;
+  }
+
+  .category-card-name {
+    font-size: 1rem;
+  }
+
+  /* History */
+  .history-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  /* About page */
   .about-stats-row {
     grid-template-columns: 1fr;
   }
@@ -1177,58 +1327,198 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .categories-grid {
-    grid-template-columns: 1fr 1fr;
+  .about-hero h1 {
+    font-size: 1.6rem;
   }
 
-  .history-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .navbar-search {
-    display: none;
-  }
-
+  /* Pagination */
   .pagination {
     flex-wrap: wrap;
   }
 
+  .pagination-btn {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0.4rem 0.8rem;
+  }
+
+  /* Profile tabs */
   .profile-tabs {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-
-
-  .rating-display {
-    flex-direction: column;
-    align-items: flex-start;
+  .profile-tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
   }
 
-  .detail-owner-actions {
-    flex-direction: column;
+  /* Comments */
+  .comment-form {
+    padding: 1rem;
   }
 
-  .detail-owner-actions .btn {
-    width: 100%;
+  .comment-item {
+    padding: 0.85rem 1rem;
+  }
+
+  /* Auth forms */
+  .auth-page {
+    padding: 1.5rem;
+  }
+
+  .auth-card {
+    padding: 1.75rem;
+  }
+
+  /* Footer */
+  .footer-links {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  /* Document viewer */
+  .doc-viewer-container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .doc-viewer-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .doc-viewer-title {
+    font-size: 0.85rem;
+  }
+
+  .doc-viewer-btn {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
   }
 }
 
 @media (max-width: 480px) {
   .books-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .book-card-cover {
+    height: 130px;
+  }
+
+  .book-card-body {
+    padding: 0.6rem;
+  }
+
+  .book-card-title {
+    font-size: 0.82rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .book-card-author {
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .book-card-meta {
+    padding-top: 0.5rem;
+  }
+
+  .book-card-category {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.5rem;
   }
 
   .navbar-brand {
-    font-size: 1.1rem;
+    font-size: 1rem;
+  }
+
+  .navbar-brand .brand-icon {
+    font-size: 1.2rem;
+  }
+
+  .navbar-inner {
+    height: 56px;
   }
 
   .hero h1 {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
   }
 
-  .navbar-search {
-    display: none;
+  .hero p {
+    font-size: 0.9rem;
+  }
+
+  .hero {
+    padding: 2rem 0;
+  }
+
+  .container {
+    padding: 0 1rem;
+  }
+
+  .section-title {
+    font-size: 1.3rem;
+  }
+
+  .categories-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-cover {
+    max-width: 180px;
+  }
+
+  .detail-info h1 {
+    font-size: 1.3rem;
+  }
+
+  /* Make buttons taller for touch */
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 36px;
+  }
+
+  /* Form inputs taller for touch */
+  .form-input,
+  .form-textarea,
+  .form-select,
+  .search-input,
+  .filter-select,
+  .comment-textarea {
+    min-height: 44px;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+
+  .tags-input-wrapper {
+    min-height: 44px;
+  }
+
+  .category-chip {
+    min-height: 36px;
+    padding: 0.3rem 0.8rem;
+  }
+
+  /* Toast */
+  .toast-container {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+  }
+
+  .toast {
+    max-width: 100%;
   }
 }
 
