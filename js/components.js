@@ -783,7 +783,7 @@ const Components = (() => {
                 </a>
               ` : ''}
               ${book.file_url ? `
-                <button class="btn btn-accent btn-lg" onclick="App.viewBook('${book.file_url.replace(/'/g, "\\'")}', '${escapeAttr(book.title)}', '${book.id}')">
+                <button class="btn btn-accent btn-lg" data-view-url="${escapeHtml(book.file_url)}" data-view-title="${escapeAttr(book.title)}" data-view-id="${book.id}" onclick="App.viewBook(this.dataset.viewUrl, this.dataset.viewTitle, this.dataset.viewId)">
                   📖 Leer
                 </button>
               ` : ''}

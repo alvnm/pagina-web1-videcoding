@@ -295,40 +295,41 @@ const App = (() => {
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    // Determine file type from URL
-    const ext = fileUrl.split('.').pop().split('?')[0].toLowerCase();
-    const isPDF = ext === 'pdf' || fileUrl.includes('application/pdf');
+    // Determine file type from URL (strip query params first)
+    const cleanUrl = fileUrl.split('?')[0];
+    const ext = cleanUrl.split('.').pop().toLowerCase();
+    const isPDF = ext === 'pdf' || fileUrl.toLowerCase().includes('.pdf');
     const isEPUB = ext === 'epub';
     const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
 
-    // Use server proxy stream URL to avoid CORS and redirect issues
+    // Always use server proxy stream URL to avoid CORS and redirect issues
     const streamUrl = bookId ? '/api/books/' + bookId + '/stream' : fileUrl;
 
-    if (isPDF) {
-      // Use iframe for PDF — stays within the page
+    // Show loading state
+    bodyEl.innerHTML = `
+      <div class="doc-viewer-loading">
+        <div class="doc-viewer-spinner"></div>
+        <p>Cargando documento...</p>
+      </div>
+    `;
+
+    if (isPDF || ext === '' || !ext) {
+      // Use iframe for PDF or unknown — the server proxy handles Content-Type
       bodyEl.innerHTML = `<iframe src="${streamUrl}" class="doc-viewer-iframe" title="Visor de documento"></iframe>`;
     } else if (isEPUB) {
-      // For EPUB, use an embed element or fallback to external
       bodyEl.innerHTML = `
         <div class="doc-viewer-fallback">
           <div style="font-size:4rem;margin-bottom:1rem;">📗</div>
           <h3>Formato EPUB</h3>
           <p>Los archivos EPUB se abrirán en una nueva pestaña para mejor compatibilidad.</p>
-          <a href="${fileUrl}" target="_blank" class="btn btn-primary" style="margin-top:1rem;">Abrir EPUB</a>
+          <a href="${streamUrl}" target="_blank" class="btn btn-primary" style="margin-top:1rem;">Abrir EPUB</a>
         </div>
       `;
     } else if (isImage) {
       bodyEl.innerHTML = `<img src="${streamUrl}" class="doc-viewer-image" alt="Documento" />`;
     } else {
-      // Unknown format — offer download
-      bodyEl.innerHTML = `
-        <div class="doc-viewer-fallback">
-          <div style="font-size:4rem;margin-bottom:1rem;">📄</div>
-          <h3>Formato no previsualizable</h3>
-          <p>Este formato no se puede previsualizar en el navegador.</p>
-          <a href="${fileUrl}" download class="btn btn-primary" style="margin-top:1rem;">⬇️ Descargar archivo</a>
-        </div>
-      `;
+      // Try iframe first for any other format
+      bodyEl.innerHTML = `<iframe src="${streamUrl}" class="doc-viewer-iframe" title="Visor de documento"></iframe>`;
     }
   }
 

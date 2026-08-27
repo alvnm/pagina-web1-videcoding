@@ -6,7 +6,69 @@ const { Router } = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 const Store = require('../db');
+
+// Helper: proxy a remote URL and pipe to response
+function proxyUrl(url, res, disposition) {
+  return new Promise((resolve) => {
+    const proto = url.startsWith('https') ? https : http;
+    proto.get(url, (upstream) => {
+      // Follow redirects (up to 3)
+      if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
+        const redirectUrl = upstream.headers.location;
+        const proto2 = redirectUrl.startsWith('https') ? https : http;
+        proto2.get(redirectUrl, (redirected) => {
+          if (redirected.statusCode >= 300 && redirected.statusCode < 400 && redirected.headers.location) {
+            const proto3 = redirected.headers.location.startsWith('https') ? https : http;
+            proto3.get(redirected.headers.location, (final) => {
+              res.writeHead(final.statusCode, {
+                'Content-Type': final.headers['content-type'] || 'application/octet-stream',
+                'Content-Disposition': disposition,
+                'Cache-Control': 'no-cache',
+              });
+              final.pipe(res);
+              final.on('end', resolve);
+              final.on('error', () => { res.status(500).end(); resolve(); });
+            }).on('error', () => { res.status(500).end(); resolve(); });
+            return;
+          }
+          res.writeHead(redirected.statusCode, {
+            'Content-Type': redirected.headers['content-type'] || 'application/octet-stream',
+            'Content-Disposition': disposition,
+            'Cache-Control': 'no-cache',
+          });
+          redirected.pipe(res);
+          redirected.on('end', resolve);
+          redirected.on('error', () => { res.status(500).end(); resolve(); });
+        }).on('error', () => { res.status(500).end(); resolve(); });
+        return;
+      }
+      res.writeHead(upstream.statusCode, {
+        'Content-Type': upstream.headers['content-type'] || 'application/octet-stream',
+        'Content-Disposition': disposition,
+        'Cache-Control': 'no-cache',
+      });
+      upstream.pipe(res);
+      upstream.on('end', resolve);
+      upstream.on('error', () => { res.status(500).end(); resolve(); });
+    }).on('error', (err) => {
+      console.error('❌ proxy error:', err.message);
+      res.status(500).end();
+      resolve();
+    });
+  });
+}
+
+// Sanitize a book title for use as a filename
+function sanitizeFilename(name) {
+  return (name || 'documento')
+    .replace(/[\\/:*?"<>|]/g, '_')   // remove illegal chars
+    .replace(/\s+/g, ' ')               // collapse whitespace
+    .trim()
+    .slice(0, 100);                     // limit length
+}
 
 const router = Router();
 
@@ -68,6 +130,50 @@ router.get('/recent', async (req, res) => {
   } catch (err) {
     console.error('❌ recent error:', err.message);
     res.status(500).json({ error: 'Error al obtener libros recientes.' });
+  }
+});
+
+// GET /api/books/:id/stream — stream file for in-page viewing (must be before /:id)
+router.get('/:id/stream', async (req, res) => {
+  try {
+    const book = await Store.bookById(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
+
+    // Map file extensions to MIME types
+    const MIME_TYPES = {
+      '.pdf': 'application/pdf',
+      '.epub': 'application/epub+zip',
+      '.mobi': 'application/x-mobipocket-ebook',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+    };
+
+    // Get file extension from URL
+    const cleanUrl = (book.file_url || '').split('?')[0];
+    const ext = path.extname(cleanUrl).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+
+    // If file_url is an external URL (Supabase Storage), proxy it with inline disposition
+    if (book.file_url && book.file_url.startsWith('http')) {
+      return proxyUrl(book.file_url, res, 'inline');
+    }
+
+    // If the file exists on disk, serve it with correct Content-Type
+    if (book.file_url) {
+      const filePath = path.join(__dirname, '..', book.file_url);
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', 'inline');
+        return res.sendFile(filePath);
+      }
+    }
+
+    res.status(404).json({ error: 'Archivo no disponible.' });
+  } catch (err) {
+    console.error('❌ stream error:', err.message);
+    res.status(500).json({ error: 'Error al cargar documento.' });
   }
 });
 
@@ -234,51 +340,21 @@ router.all('/:id/download', async (req, res) => {
       await Store.addReadingHistory(req.session.user.id, req.params.id);
     }
 
+    // Build filename from book title + extension
+    const ext = book.file_url ? path.extname(book.file_url.split('?')[0]) || '.pdf' : '.pdf';
+    const filename = sanitizeFilename(book.title) + ext;
+    const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+
     // If file_url is an external URL (Supabase Storage), proxy the file
     if (book.file_url && book.file_url.startsWith('http')) {
-      try {
-        const https = require('https');
-        const http = require('http');
-        const proto = book.file_url.startsWith('https') ? https : http;
-
-        return new Promise((resolve) => {
-          proto.get(book.file_url, (upstream) => {
-            // Follow redirects
-            if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
-              proto.get(upstream.headers.location, (redirected) => {
-                res.writeHead(redirected.statusCode, {
-                  'Content-Type': redirected.headers['content-type'] || 'application/octet-stream',
-                  'Content-Disposition': 'attachment',
-                  'Cache-Control': 'no-cache',
-                });
-                redirected.pipe(res);
-                redirected.on('end', resolve);
-                redirected.on('error', () => { res.status(500).json({ error: 'Error proxy.' }); resolve(); });
-              }).on('error', () => { res.status(500).json({ error: 'Error proxy.' }); resolve(); });
-              return;
-            }
-            res.writeHead(upstream.statusCode, {
-              'Content-Type': upstream.headers['content-type'] || 'application/octet-stream',
-              'Content-Disposition': 'attachment',
-              'Cache-Control': 'no-cache',
-            });
-            upstream.pipe(res);
-            upstream.on('end', resolve);
-            upstream.on('error', () => { res.status(500).json({ error: 'Error proxy.' }); resolve(); });
-          }).on('error', () => { res.status(500).json({ error: 'Error proxy.' }); resolve(); });
-        });
-      } catch (proxyErr) {
-        console.error('❌ proxy error:', proxyErr.message);
-        // Fallback: return URL for client-side handling
-        return res.json({ ok: true, downloads, file_url: book.file_url });
-      }
+      return proxyUrl(book.file_url, res, disposition);
     }
 
-    // If the file exists on disk, serve it
+    // If the file exists on disk, serve it with the book title as filename
     if (book.file_url) {
       const filePath = path.join(__dirname, '..', book.file_url);
       if (fs.existsSync(filePath)) {
-        return res.download(filePath, path.basename(book.file_url));
+        return res.download(filePath, filename);
       }
     }
 
@@ -287,67 +363,6 @@ router.all('/:id/download', async (req, res) => {
   } catch (err) {
     console.error('❌ download error:', err.message);
     res.status(500).json({ error: 'Error al descargar.' });
-  }
-});
-
-// GET /api/books/:id/stream — stream file for in-page viewing (iframe)
-router.get('/:id/stream', async (req, res) => {
-  try {
-    const book = await Store.bookById(req.params.id);
-    if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
-
-    // If file_url is an external URL (Supabase Storage), proxy it
-    if (book.file_url && book.file_url.startsWith('http')) {
-      try {
-        const https = require('https');
-        const http = require('http');
-        const proto = book.file_url.startsWith('https') ? https : http;
-
-        return new Promise((resolve) => {
-          proto.get(book.file_url, (upstream) => {
-            if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
-              proto.get(upstream.headers.location, (redirected) => {
-                res.writeHead(redirected.statusCode, {
-                  'Content-Type': redirected.headers['content-type'] || 'application/octet-stream',
-                  'Content-Disposition': 'inline',
-                  'Cache-Control': 'public, max-age=3600',
-                  'Access-Control-Allow-Origin': '*',
-                });
-                redirected.pipe(res);
-                redirected.on('end', resolve);
-                redirected.on('error', () => { res.status(500).end(); resolve(); });
-              }).on('error', () => { res.status(500).end(); resolve(); });
-              return;
-            }
-            res.writeHead(upstream.statusCode, {
-              'Content-Type': upstream.headers['content-type'] || 'application/octet-stream',
-              'Content-Disposition': 'inline',
-              'Cache-Control': 'public, max-age=3600',
-              'Access-Control-Allow-Origin': '*',
-            });
-            upstream.pipe(res);
-            upstream.on('end', resolve);
-            upstream.on('error', () => { res.status(500).end(); resolve(); });
-          }).on('error', () => { res.status(500).end(); resolve(); });
-        });
-      } catch (proxyErr) {
-        console.error('❌ stream proxy error:', proxyErr.message);
-        return res.redirect(book.file_url);
-      }
-    }
-
-    // If the file exists on disk, serve it inline
-    if (book.file_url) {
-      const filePath = path.join(__dirname, '..', book.file_url);
-      if (fs.existsSync(filePath)) {
-        return res.sendFile(filePath);
-      }
-    }
-
-    res.status(404).json({ error: 'Archivo no disponible.' });
-  } catch (err) {
-    console.error('❌ stream error:', err.message);
-    res.status(500).json({ error: 'Error al cargar documento.' });
   }
 });
 
