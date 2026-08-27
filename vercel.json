@@ -1,16 +1,5 @@
 {
-  "functions": {
-    "api/index.js": {
-      "runtime": "@vercel/node@3",
-      "maxDuration": 30
-    },
-    "api/test.js": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
-    { "source": "/api/test", "destination": "/api/test" },
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/index" }
   ]
 }
