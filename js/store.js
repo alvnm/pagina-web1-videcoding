@@ -12,6 +12,14 @@ const Store = (() => {
   const supabase = supabaseClient; // acceso interno al cliente Supabase
 
   // ---- Generic fetch helper ----
+  const FETCH_TIMEOUT = 15000; // 15 seconds
+
+  function _fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+  }
+
   async function _parseResponse(res) {
     const text = await res.text();
     try {
@@ -22,14 +30,14 @@ const Store = (() => {
   }
 
   async function _get(url) {
-    const res = await fetch(API + url, { credentials: 'include' });
+    const res = await _fetchWithTimeout(API + url, { credentials: 'include' });
     const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error del servidor');
     return data;
   }
 
   async function _post(url, body) {
-    const res = await fetch(API + url, {
+    const res = await _fetchWithTimeout(API + url, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -88,7 +96,7 @@ const Store = (() => {
   }
 
   async function addBook(formData) {
-    const res = await fetch(API + '/books', {
+    const res = await _fetchWithTimeout(API + '/books', {
       method: 'POST',
       credentials: 'include',
       body: formData, // FormData — browser sets Content-Type with boundary
@@ -99,7 +107,7 @@ const Store = (() => {
   }
 
   async function addBookJSON(bookData) {
-    const res = await fetch(API + '/books', {
+    const res = await _fetchWithTimeout(API + '/books', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -149,7 +157,7 @@ const Store = (() => {
   }
 
   async function updateUserProfile(id, updates) {
-    const res = await fetch(API + '/users/' + id, {
+    const res = await _fetchWithTimeout(API + '/users/' + id, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -166,7 +174,7 @@ const Store = (() => {
 
   // ---- Book CRUD ----
   async function deleteBook(bookId) {
-    const res = await fetch(API + '/books/' + bookId, {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -176,7 +184,7 @@ const Store = (() => {
   }
 
   async function updateBook(bookId, updates) {
-    const res = await fetch(API + '/books/' + bookId, {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -189,7 +197,7 @@ const Store = (() => {
 
   // ---- Ratings ----
   async function rateBook(bookId, score) {
-    const res = await fetch(API + '/books/' + bookId + '/rate', {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId + '/rate', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -212,7 +220,7 @@ const Store = (() => {
   }
 
   async function addBookComment(bookId, text) {
-    const res = await fetch(API + '/books/' + bookId + '/comments', {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId + '/comments', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -224,7 +232,7 @@ const Store = (() => {
   }
 
   async function deleteBookComment(bookId, commentId) {
-    const res = await fetch(API + '/books/' + bookId + '/comments/' + commentId, {
+    const res = await _fetchWithTimeout(API + '/books/' + bookId + '/comments/' + commentId, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -256,7 +264,7 @@ const Store = (() => {
   }
 
   async function adminDeleteUser(userId) {
-    const res = await fetch(API + '/admin/users/' + userId, {
+    const res = await _fetchWithTimeout(API + '/admin/users/' + userId, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -266,7 +274,7 @@ const Store = (() => {
   }
 
   async function adminDeleteBook(bookId) {
-    const res = await fetch(API + '/admin/books/' + bookId, {
+    const res = await _fetchWithTimeout(API + '/admin/books/' + bookId, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -276,7 +284,7 @@ const Store = (() => {
   }
 
   async function adminSetUserRole(userId, role) {
-    const res = await fetch(API + '/admin/users/' + userId + '/role', {
+    const res = await _fetchWithTimeout(API + '/admin/users/' + userId + '/role', {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

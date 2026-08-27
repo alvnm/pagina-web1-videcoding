@@ -21,6 +21,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Session
+const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 app.use(session({
   name: 'bcv.sid',
   secret: process.env.SESSION_SECRET || 'biblioteca-comunitaria-secret-2026',
@@ -28,8 +29,10 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
+    secure: isProd,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    sameSite: 'lax',
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
   },
 }));
 

@@ -84,9 +84,19 @@ router.post('/login', async (req, res) => {
 
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
+  const cookieOpts = {
+    path: '/',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL,
+  };
   req.session.destroy((err) => {
-    if (err) return res.status(500).json({ error: 'Error al cerrar sesión.' });
-    res.clearCookie('bcv.sid');
+    if (err) {
+      // Even if destroy fails, clear the cookie so the client is logged out
+      res.clearCookie('bcv.sid', cookieOpts);
+      return res.status(500).json({ error: 'Error al cerrar sesión.' });
+    }
+    res.clearCookie('bcv.sid', cookieOpts);
     res.json({ ok: true });
   });
 });

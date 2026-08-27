@@ -34,6 +34,7 @@ const App = (() => {
 
   function _loginPage() {
     _renderPage(Components.renderAuthForm('login'));
+    _attachAuthListeners();
   }
 
   function _registerPage() {
@@ -237,7 +238,10 @@ const App = (() => {
       Components.showToast('⬇️ Descargando...', 'info');
 
       // Fetch the file via server proxy (handles Supabase Storage redirect)
-      const resp = await fetch('/api/books/' + bookId + '/download');
+      const controller = new AbortController();
+      const downloadTimeout = setTimeout(() => controller.abort(), 30000);
+      const resp = await fetch('/api/books/' + bookId + '/download', { signal: controller.signal });
+      clearTimeout(downloadTimeout);
       if (!resp.ok) throw new Error('Error al descargar');
 
       // Check if response is a redirect (external URL)
@@ -572,6 +576,19 @@ const App = (() => {
       }
     }
 
+    if (!email || !password) {
+      Components.showToast('Por favor completa todos los campos.', 'error');
+      return;
+    }
+
+    // Disable submit button to prevent double-click
+    const submitBtn = document.querySelector('#auth-form button[type="submit"]');
+    const originalText = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = type === 'register' ? 'Creando cuenta...' : 'Entrando...';
+    }
+
     try {
       if (type === 'register') {
         const name = document.getElementById('auth-name').value.trim();
@@ -579,10 +596,6 @@ const App = (() => {
         _session = user;
         Components.showToast(`¡Bienvenido/a, ${user.name}!`, 'success');
       } else {
-        if (!email || !password) {
-          Components.showToast('Por favor completa todos los campos.', 'error');
-          return;
-        }
         const { user } = await Store.loginUser({ email, password });
         _session = user;
         Components.showToast(`¡Hola de nuevo, ${user.name.split(' ')[0]}!`, 'success');
@@ -590,6 +603,10 @@ const App = (() => {
       Router.navigate('/');
     } catch (err) {
       Components.showToast(err.message, 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
     }
   }
 
@@ -702,9 +719,14 @@ const App = (() => {
   }
 
   async function logout() {
+    const logoutBtn = document.querySelector('[onclick*="logout"]');
+    if (logoutBtn) {
+      logoutBtn.disabled = true;
+      logoutBtn.textContent = 'Cerrando...';
+    }
     try {
       await Store.logoutUser();
-    } catch { /* ignore */ }
+    } catch { /* server error, still clear local state */ }
     _session = null;
     Components.showToast('Sesión cerrada.', 'info');
     Router.navigate('/');
