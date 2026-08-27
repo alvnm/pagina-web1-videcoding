@@ -14,10 +14,10 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // ---- HTTP helpers ----
 
-function _fetchJSON(url, timeoutMs = 8000) {
+function _fetchJSON(url, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
-    const timer = setTimeout(() => reject(new Error('Timeout')), timeoutMs);
+    const timer = setTimeout(() => { try { reject(new Error('Timeout')); } catch {} }, timeoutMs);
     proto.get(url, { headers: { 'User-Agent': 'BibliotecaComunitaria/1.0' } }, (res) => {
       // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -296,16 +296,27 @@ async function downloadCoverLocally(url, prefix) {
 async function autoGenerateCover(title, author, category, bookId) {
   console.log(`🔍 Auto-generating cover for "${title}" by ${author}...`);
 
-  // Try Open Library first
-  const olCover = await searchOpenLibraryCover(title, author);
-  if (olCover) {
-    console.log('📚 Found cover on Open Library');
-    return olCover;
+  // Try Open Library first (with extra safety)
+  try {
+    const olCover = await searchOpenLibraryCover(title, author);
+    if (olCover) {
+      console.log('📚 Found cover on Open Library:', olCover);
+      return olCover;
+    }
+  } catch (err) {
+    console.error('⚠️ Open Library search failed:', err.message);
   }
 
   // Fallback to placeholder SVG
-  console.log('🎨 No Open Library cover found, generating placeholder');
-  return savePlaceholderCover(title, author, category, bookId);
+  console.log('🎨 No Open Library cover found, generating placeholder for:', title);
+  try {
+    const placeholder = savePlaceholderCover(title, author, category, bookId);
+    console.log('✅ Placeholder generated:', placeholder);
+    return placeholder;
+  } catch (err) {
+    console.error('❌ Placeholder generation failed:', err.message);
+    return null;
+  }
 }
 
 module.exports = {

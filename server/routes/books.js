@@ -171,11 +171,17 @@ router.post('/auto-cover', requireAuth, async (req, res) => {
 
     for (const book of booksToProcess) {
       try {
-        const coverUrl = await coverService.autoGenerateCover(
-          book.title, book.author, book.category, book.id
-        );
+        let coverUrl;
+        try {
+          coverUrl = await coverService.autoGenerateCover(
+            book.title, book.author, book.category, book.id
+          );
+        } catch (coverErr) {
+          // Fallback to placeholder
+          coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
+        }
         if (coverUrl) {
-          await Store.updateBook(book.id, req.session.user.id, { cover_url: coverUrl });
+          await Store.updateBookCover(book.id, coverUrl);
           generated++;
           results.push({ book_id: book.id, title: book.title, cover_url: coverUrl, status: 'generated' });
         } else {
@@ -287,30 +293,51 @@ router.get('/', async (req, res) => {
 // POST /api/books/:id/auto-cover — auto-generate cover for a specific book
 router.post('/:id/auto-cover', requireAuth, async (req, res) => {
   try {
+    console.log(`🖼️ Auto-cover request for book ${req.params.id} by user ${req.session.user.id}`);
+
     const book = await Store.bookById(req.params.id);
-    if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
+    if (!book) {
+      console.log('❌ Book not found:', req.params.id);
+      return res.status(404).json({ error: 'Documento no encontrado.' });
+    }
+
+    console.log(`📖 Book: "${book.title}" by ${book.author}, owner: ${book.user_id}`);
 
     // Only owner or admin can generate cover
-    const isAdmin = await Store.isAdmin(req.session.user.id);
-    if (book.user_id !== req.session.user.id && !isAdmin) {
+    const userIsAdmin = await Store.isAdmin(req.session.user.id);
+    console.log(`👤 User is admin: ${userIsAdmin}, is owner: ${book.user_id === req.session.user.id}`);
+
+    if (book.user_id !== req.session.user.id && !userIsAdmin) {
       return res.status(403).json({ error: 'No tienes permiso para modificar este documento.' });
     }
 
-    const coverUrl = await coverService.autoGenerateCover(
-      book.title, book.author, book.category, book.id
-    );
+    let coverUrl;
+    try {
+      coverUrl = await coverService.autoGenerateCover(
+        book.title, book.author, book.category, book.id
+      );
+    } catch (coverErr) {
+      console.error('❌ coverService.autoGenerateCover threw:', coverErr.message);
+      // Fallback: generate placeholder directly
+      coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
+    }
+
+    console.log('📎 Generated cover URL:', coverUrl);
 
     if (!coverUrl) {
+      console.log('❌ No cover URL generated');
       return res.status(404).json({ error: 'No se pudo generar una portada.' });
     }
 
-    // Update book with new cover
-    const result = await Store.updateBook(book.id, req.session.user.id, { cover_url: coverUrl });
+    // Update book with new cover (using dedicated cover update method)
+    const result = await Store.updateBookCover(book.id, coverUrl);
+    console.log('✅ Cover updated successfully for book:', book.title);
 
     res.json({ cover_url: coverUrl, book: result });
   } catch (err) {
     console.error('❌ auto-cover single error:', err.message);
-    res.status(500).json({ error: 'Error al generar portada.' });
+    console.error('❌ Full error stack:', err.stack);
+    res.status(500).json({ error: 'Error al generar portada: ' + err.message });
   }
 });
 

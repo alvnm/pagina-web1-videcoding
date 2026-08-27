@@ -569,6 +569,31 @@ const Store = {
     return { deleted: true, deletedFileUrls };
   },
 
+  // ===================== Cover Updates =====================
+
+  /**
+   * Update only the cover_url of a book (bypasses ownership check for admins)
+   * Used by auto-cover generation
+   */
+  async updateBookCover(bookId, coverUrl) {
+    const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
+    if (!book) return null;
+
+    const { error } = await supabase
+      .from('books')
+      .update({ cover_url: coverUrl })
+      .eq('id', bookId);
+
+    if (error) {
+      console.error('❌ updateBookCover error:', error.message);
+      throw error;
+    }
+
+    const updatedBook = { ...book, cover_url: coverUrl };
+    const [enriched] = await this._enrichBooks([updatedBook]);
+    return enriched;
+  },
+
   async adminSetUserRole(userId, role) {
     if (!['admin', 'user'].includes(role)) return { error: 'invalid_role' };
 
