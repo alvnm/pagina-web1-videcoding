@@ -13,6 +13,9 @@ const App = (() => {
   let _currentCategory = '';
   let _currentPage = 1;
 
+  // Flag: favorites changed since last profile load
+  let _favoritesDirty = false;
+
   // ---- Session management ----
   async function _loadSession() {
     _session = await Store.getSession();
@@ -395,6 +398,7 @@ const App = (() => {
             Store.getUserFavorites(params.id),
             Store.getUserHistory(params.id),
           ]);
+          _favoritesDirty = false;
         } catch { /* ignore */ }
       }
 
@@ -756,8 +760,34 @@ const App = (() => {
     }
     try {
       const result = await Store.toggleFavorite(bookId);
-      btnEl.innerHTML = result.isFavorite ? '❤️' : '🤍';
-      btnEl.classList.toggle('active', result.isFavorite);
+      _favoritesDirty = true;
+
+      // If unfavorited and the card is inside the favorites tab, remove it
+      if (!result.isFavorite) {
+        const card = btnEl.closest('.book-card');
+        const favTab = btnEl.closest('#tab-favorites, .profile-tab-content');
+        if (favTab && card) {
+          card.style.transition = 'opacity 0.3s, transform 0.3s';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.9)';
+          setTimeout(() => {
+            card.remove();
+            // Show empty state if no favorites left
+            const grid = favTab.querySelector('.books-grid');
+            if (grid && grid.children.length === 0) {
+              grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❤️</div><p class="empty-state-text">Aún no tienes favoritos.</p></div>';
+            }
+          }, 300);
+        } else {
+          // Regular card (catalog) — just update icon
+          btnEl.innerHTML = '🤍';
+          btnEl.classList.remove('active');
+        }
+      } else {
+        btnEl.innerHTML = '❤️';
+        btnEl.classList.add('active');
+      }
+
       Components.showToast(
         result.isFavorite ? 'Agregado a favoritos ❤️' : 'Removido de favoritos',
         'success'
@@ -780,6 +810,7 @@ const App = (() => {
         btn.className = `btn btn-lg ${result.isFavorite ? 'btn-fav-active' : 'btn-secondary'}`;
         btn.innerHTML = `${result.isFavorite ? '❤️' : '🤍'} ${result.isFavorite ? 'En Favoritos' : 'Favorito'} <span class="fav-count" id="detail-fav-count">${result.count || ''}</span>`;
       }
+      _favoritesDirty = true;
       Components.showToast(
         result.isFavorite ? 'Agregado a favoritos ❤️' : 'Removido de favoritos',
         'success'

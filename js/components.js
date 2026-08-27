@@ -958,7 +958,7 @@ const Components = (() => {
       `;
 
       const favCards = favorites.length > 0
-        ? favorites.map(b => renderBookCard(b)).join('')
+        ? favorites.map(b => renderBookCard(b, true, true)).join('')
         : '<div class="empty-state"><div class="empty-state-icon">❤️</div><p class="empty-state-text">Aún no tienes favoritos.</p></div>';
 
       const historyCards = history.length > 0
