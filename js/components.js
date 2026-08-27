@@ -17,6 +17,37 @@ const Components = (() => {
    *  1) JS-escape: backslash, single-quote, newlines
    *  2) HTML-entity-encode: double-quote, ampersand, angle brackets
    */
+  // ---- Document Viewer Modal ----
+  function renderDocumentViewer() {
+    return `
+      <div id="doc-viewer-modal" class="doc-viewer-modal" style="display:none;">
+        <div class="doc-viewer-overlay" onclick="App.closeDocViewer()"></div>
+        <div class="doc-viewer-container">
+          <div class="doc-viewer-header">
+            <span class="doc-viewer-title" id="doc-viewer-title">Documento</span>
+            <div class="doc-viewer-actions">
+              <button class="doc-viewer-btn" onclick="App.downloadFromViewer()" title="Descargar">
+                ⬇️ Descargar
+              </button>
+              <a class="doc-viewer-btn" id="doc-viewer-open-external" href="" target="_blank" title="Abrir en nueva pestaña">
+                🔗 Abrir externo
+              </a>
+              <button class="doc-viewer-btn doc-viewer-close" onclick="App.closeDocViewer()" title="Cerrar">
+                ✕
+              </button>
+            </div>
+          </div>
+          <div class="doc-viewer-body" id="doc-viewer-body">
+            <div class="doc-viewer-loading">
+              <div class="doc-viewer-spinner"></div>
+              <p>Cargando documento...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function escapeAttr(str) {
     if (str == null) return '';
     return String(str)
@@ -752,7 +783,7 @@ const Components = (() => {
                 </a>
               ` : ''}
               ${book.file_url ? `
-                <button class="btn btn-accent btn-lg" onclick="App.viewBook('${book.file_url.replace(/'/g, "\\'")}')">
+                <button class="btn btn-accent btn-lg" onclick="App.viewBook('${book.file_url.replace(/'/g, "\\'")}', '${escapeAttr(book.title)}', '${book.id}')">
                   📖 Leer
                 </button>
               ` : ''}
@@ -1518,5 +1549,6 @@ const Components = (() => {
     renderCategoriesPage,
     renderAboutPage,
     renderAdminPage,
+    renderDocumentViewer,
   };
 })();

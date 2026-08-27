@@ -29,7 +29,7 @@ BEGIN
   IF array_length(missing, 1) > 0 THEN
     RAISE NOTICE '';
     RAISE NOTICE '  ⚠️  Faltan tablas: %', array_to_string(missing, ', ');
-    RAISE NOTICE '  → Ejecuta supabase-tables.sql para crearlas';
+    RAISE NOTICE '  → Ejecuta supabase-schema.sql para crearlas';
   ELSE
     RAISE NOTICE '';
     RAISE NOTICE '  ✅ Todas las tablas existen';
@@ -113,7 +113,7 @@ BEGIN
   IF array_length(missing_policies, 1) > 0 THEN
     RAISE NOTICE '';
     RAISE NOTICE '  ⚠️  Faltan % política(s): %', array_length(missing_policies, 1), array_to_string(missing_policies, ', ');
-    RAISE NOTICE '  → Ejecuta supabase-migration-rls.sql para crearlas';
+    RAISE NOTICE '  → Ejecuta supabase-schema.sql para crearlas';
   ELSE
     RAISE NOTICE '';
     RAISE NOTICE '  ✅ Todas las políticas RLS están configuradas';
@@ -137,7 +137,7 @@ BEGIN
     RAISE NOTICE '  ✅ Columna "id" existe en reading_history';
   ELSE
     RAISE NOTICE '  ❌ Columna "id" NO existe en reading_history';
-    RAISE NOTICE '  → Ejecuta supabase-migration-reading-history.sql';
+    RAISE NOTICE '  → Ejecuta supabase-schema.sql';
   END IF;
 END $$;
 

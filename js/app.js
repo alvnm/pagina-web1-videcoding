@@ -24,6 +24,7 @@ const App = (() => {
     $app().innerHTML =
       Components.renderNavbar(_session) +
       content +
+      Components.renderDocumentViewer() +
       Components.renderFooter();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -231,20 +232,119 @@ const App = (() => {
   async function downloadBook(bookId) {
     try {
       Components.showToast('⬇️ Descargando...', 'info');
-      // The server redirects to the file URL (Supabase Storage or local)
-      window.location.href = '/api/books/' + bookId + '/download';
+
+      // Fetch the file via server proxy (handles Supabase Storage redirect)
+      const resp = await fetch('/api/books/' + bookId + '/download');
+      if (!resp.ok) throw new Error('Error al descargar');
+
+      // Check if response is a redirect (external URL)
+      const contentType = resp.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        // Server returned a redirect page — follow it
+        const data = await resp.json();
+        if (data.file_url) {
+          window.location.href = data.file_url;
+          return;
+        }
+      }
+
+      // Blob download
+      const blob = await resp.blob();
+      const disposition = resp.headers.get('content-disposition');
+      let filename = 'documento';
+      if (disposition) {
+        const match = disposition.match(/filename[*]?=(?:UTF-8''|"?)([^";]+)/i);
+        if (match) filename = decodeURIComponent(match[1]);
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       Components.showToast('Error al descargar: ' + err.message, 'error');
     }
   }
 
-  function viewBook(fileUrl) {
+  let _currentViewerUrl = '';
+  let _currentViewerTitle = '';
+  let _currentViewerBookId = '';
+
+  function viewBook(fileUrl, title, bookId) {
     if (!fileUrl) {
       Components.showToast('No hay archivo disponible para leer.', 'error');
       return;
     }
-    // Open the file in a new tab (works for PDFs and other browser-renderable formats)
-    window.open(fileUrl, '_blank');
+    _currentViewerUrl = fileUrl;
+    _currentViewerTitle = title || 'Documento';
+    _currentViewerBookId = bookId || '';
+
+    const modal = document.getElementById('doc-viewer-modal');
+    const titleEl = document.getElementById('doc-viewer-title');
+    const bodyEl = document.getElementById('doc-viewer-body');
+    const externalLink = document.getElementById('doc-viewer-open-external');
+
+    if (!modal || !bodyEl) return;
+
+    if (titleEl) titleEl.textContent = _currentViewerTitle;
+    if (externalLink) externalLink.href = fileUrl;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // Determine file type from URL
+    const ext = fileUrl.split('.').pop().split('?')[0].toLowerCase();
+    const isPDF = ext === 'pdf' || fileUrl.includes('application/pdf');
+    const isEPUB = ext === 'epub';
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+
+    // Use server proxy stream URL to avoid CORS and redirect issues
+    const streamUrl = bookId ? '/api/books/' + bookId + '/stream' : fileUrl;
+
+    if (isPDF) {
+      // Use iframe for PDF — stays within the page
+      bodyEl.innerHTML = `<iframe src="${streamUrl}" class="doc-viewer-iframe" title="Visor de documento"></iframe>`;
+    } else if (isEPUB) {
+      // For EPUB, use an embed element or fallback to external
+      bodyEl.innerHTML = `
+        <div class="doc-viewer-fallback">
+          <div style="font-size:4rem;margin-bottom:1rem;">📗</div>
+          <h3>Formato EPUB</h3>
+          <p>Los archivos EPUB se abrirán en una nueva pestaña para mejor compatibilidad.</p>
+          <a href="${fileUrl}" target="_blank" class="btn btn-primary" style="margin-top:1rem;">Abrir EPUB</a>
+        </div>
+      `;
+    } else if (isImage) {
+      bodyEl.innerHTML = `<img src="${streamUrl}" class="doc-viewer-image" alt="Documento" />`;
+    } else {
+      // Unknown format — offer download
+      bodyEl.innerHTML = `
+        <div class="doc-viewer-fallback">
+          <div style="font-size:4rem;margin-bottom:1rem;">📄</div>
+          <h3>Formato no previsualizable</h3>
+          <p>Este formato no se puede previsualizar en el navegador.</p>
+          <a href="${fileUrl}" download class="btn btn-primary" style="margin-top:1rem;">⬇️ Descargar archivo</a>
+        </div>
+      `;
+    }
+  }
+
+  function closeDocViewer() {
+    const modal = document.getElementById('doc-viewer-modal');
+    const bodyEl = document.getElementById('doc-viewer-body');
+    if (modal) modal.style.display = 'none';
+    if (bodyEl) bodyEl.innerHTML = '';
+    document.body.style.overflow = '';
+    _currentViewerUrl = '';
+  }
+
+  async function downloadFromViewer() {
+    if (_currentViewerUrl) {
+      await downloadBook(_currentViewerBookId);
+    }
   }
 
   async function shareBook(bookId) {
@@ -884,6 +984,16 @@ const App = (() => {
 
     // Start
     Router.init();
+
+    // Close document viewer on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('doc-viewer-modal');
+        if (modal && modal.style.display !== 'none') {
+          closeDocViewer();
+        }
+      }
+    });
   }
 
   // ---- Edit Profile ----
@@ -1132,6 +1242,8 @@ const App = (() => {
     rateBook,
     downloadBook,
     viewBook,
+    closeDocViewer,
+    downloadFromViewer,
     shareBook,
     confirmDeleteBook,
     handleProfileEdit,
