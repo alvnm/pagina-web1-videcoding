@@ -9,6 +9,7 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const Store = require('../db');
+const { generateCoverFromPDF } = require('../cover-generator');
 
 // Helper: proxy a remote URL and pipe to response
 function proxyUrl(url, res, disposition) {
@@ -77,6 +78,7 @@ const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_EXTS = ['.pdf', '.epub', '.mobi', '.doc', '.docx'];
+const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -95,6 +97,20 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Formato no soportado. Formatos válidos: ' + ALLOWED_EXTS.join(', ')));
+    }
+  },
+});
+
+// Multer for cover image uploads
+const coverUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB for cover images
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_IMAGE_EXTS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Formato de imagen no soportado. Formatos válidos: ' + ALLOWED_IMAGE_EXTS.join(', ')));
     }
   },
 });
@@ -229,14 +245,33 @@ router.get('/:id', async (req, res) => {
 });
 
 // PUT /api/books/:id (update book — owner only)
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, (req, res, next) => {
+  // Try multer for multipart (local dev), skip for JSON (Vercel)
+  if (req.is('multipart/form-data')) {
+    coverUpload.single('cover_image')(req, res, (err) => {
+      if (err) return next(err);
+      next();
+    });
+  } else {
+    next();
+  }
+}, async (req, res) => {
   try {
     const book = await Store.bookById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
 
-    const { title, author, category, description, tags } = req.body;
+    const { title, author, category, description, tags, cover_url } = req.body;
+
+    // Handle cover image update
+    let bookCoverUrl = cover_url;
+    const coverFile = req.file;
+    if (coverFile) {
+      bookCoverUrl = '/uploads/' + coverFile.filename;
+    }
+
     const result = await Store.updateBook(req.params.id, req.session.user.id, {
       title, author, category, description, tags,
+      cover_url: bookCoverUrl,
     });
 
     if (result && result.error === 'forbidden') {
@@ -281,7 +316,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
 router.post('/', requireAuth, (req, res, next) => {
   // Try multer for multipart (local dev), skip for JSON (Vercel)
   if (req.is('multipart/form-data')) {
-    upload.single('file')(req, res, (err) => {
+    // Use multer fields to handle both file and cover_image
+    upload.fields([
+      { name: 'file', maxCount: 1 },
+      { name: 'cover_image', maxCount: 1 }
+    ])(req, res, (err) => {
       if (err) return next(err);
       next();
     });
@@ -290,17 +329,43 @@ router.post('/', requireAuth, (req, res, next) => {
   }
 }, async (req, res) => {
   try {
-    const { title, author, category, description, tags, file_url } = req.body;
+    const { title, author, category, description, tags, file_url, cover_url } = req.body;
 
     if (!title || !author || !category || !description) {
       return res.status(400).json({ error: 'Título, autor, categoría y descripción son obligatorios.' });
     }
 
     // Support both multer file upload and JSON file_url (for Vercel/Supabase Storage)
-    const file = req.file;
+    const file = req.files && req.files.file ? req.files.file[0] : req.file;
     let bookFileUrl = file_url || '';
     if (file) {
       bookFileUrl = '/uploads/' + file.filename;
+    }
+
+    // Handle cover image
+    const coverFile = req.files && req.files.cover_image ? req.files.cover_image[0] : null;
+    let bookCoverUrl = cover_url || '';
+    if (coverFile) {
+      bookCoverUrl = '/uploads/' + coverFile.filename;
+    }
+
+    // If no cover provided, try to generate from PDF first page
+    if (!bookCoverUrl && bookFileUrl) {
+      try {
+        const filePath = bookFileUrl.startsWith('http') ? null : path.join(__dirname, '..', bookFileUrl);
+        if (filePath && fs.existsSync(filePath)) {
+          const ext = path.extname(filePath).toLowerCase();
+          if (ext === '.pdf') {
+            const coverPath = await generateCoverFromPDF(filePath);
+            if (coverPath) {
+              bookCoverUrl = coverPath;
+            }
+          }
+        }
+      } catch (coverErr) {
+        console.error('⚠️ Could not generate cover from PDF:', coverErr.message);
+        // Continue without cover - not a critical error
+      }
     }
 
     // Parse tags
@@ -315,6 +380,7 @@ router.post('/', requireAuth, (req, res, next) => {
       category,
       description: description.trim(),
       file_url: bookFileUrl,
+      cover_url: bookCoverUrl,
       user_id: req.session.user.id,
       tags: tagList,
     });

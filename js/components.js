@@ -441,12 +441,17 @@ const Components = (() => {
       </button>
     ` : '';
 
+    // Show cover image if available, otherwise use gradient with icon
+    const coverContent = book.cover_url
+      ? `<img src="${escapeHtml(book.cover_url)}" alt="Portada de ${escapeHtml(book.title)}" class="book-card-cover-img" />`
+      : `${getFileIcon(book.fileType)}`;
+
     return `
       <div class="book-card" onclick="Router.navigate('/book/${book.id}')">
-        <div class="book-card-cover" style="background:${getCoverGradient(book.id)}">
+        <div class="book-card-cover" style="${book.cover_url ? '' : 'background:' + getCoverGradient(book.id)}">
           <span class="file-badge">${escapeHtml(book.fileType || 'PDF')}</span>
           ${favBtn}
-          ${getFileIcon(book.fileType)}
+          ${coverContent}
         </div>
         <div class="book-card-body">
           <div class="book-card-title">${escapeHtml(book.title)}</div>
@@ -676,6 +681,16 @@ const Components = (() => {
             <div id="file-preview"></div>
           </div>
           <div class="form-group">
+            <label class="form-label">Imagen de Portada</label>
+            <div class="cover-upload-zone" id="cover-drop-zone" onclick="document.getElementById('cover-input').click()">
+              <div class="cover-upload-icon">🖼️</div>
+              <p class="cover-upload-text">Selecciona una imagen para la portada</p>
+              <p class="cover-upload-formats">Formatos: JPG, PNG, WebP (máx. 5 MB). Si no seleccionas ninguna, se usará la primera página del PDF.</p>
+            </div>
+            <input type="file" id="cover-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" />
+            <div id="cover-preview"></div>
+          </div>
+          <div class="form-group">
             <label class="form-label">Título <span class="required">*</span></label>
             <input type="text" class="form-input" id="book-title" placeholder="Título del documento" required />
           </div>
@@ -753,14 +768,19 @@ const Components = (() => {
       </button>
     `;
 
+    // Show cover image if available, otherwise use gradient with icon
+    const detailCoverContent = book.cover_url
+      ? `<img src="${escapeHtml(book.cover_url)}" alt="Portada de ${escapeHtml(book.title)}" class="detail-cover-img" />`
+      : `${getFileIcon(book.fileType)}`;
+
     return `
       <div class="detail-page container page-enter">
         <button class="btn btn-secondary btn-sm" onclick="Router.navigate('/')" style="margin-bottom:1.5rem;">
           ← Volver al catálogo
         </button>
         <div class="detail-layout">
-          <div class="detail-cover" style="background:${getCoverGradient(book.id)}">
-            ${getFileIcon(book.fileType)}
+          <div class="detail-cover" style="${book.cover_url ? '' : 'background:' + getCoverGradient(book.id)}">
+            ${detailCoverContent}
           </div>
           <div class="detail-info">
             <h1>${escapeHtml(book.title)}</h1>
@@ -962,11 +982,15 @@ const Components = (() => {
         : '<div class="empty-state"><div class="empty-state-icon">❤️</div><p class="empty-state-text">Aún no tienes favoritos.</p></div>';
 
       const historyCards = history.length > 0
-        ? history.map(b => `
+        ? history.map(b => {
+            const historyCoverContent = b.cover_url
+              ? `<img src="${escapeHtml(b.cover_url)}" alt="" class="book-card-cover-img" />`
+              : `${getFileIcon(b.fileType)}`;
+            return `
             <div class="history-item">
               <div class="book-card" onclick="Router.navigate('/book/${b.id}')">
-                <div class="book-card-cover" style="background:${getCoverGradient(b.id)};height:120px;">
-                  ${getFileIcon(b.fileType)}
+                <div class="book-card-cover" style="${b.cover_url ? '' : 'background:' + getCoverGradient(b.id)};height:120px;">
+                  ${historyCoverContent}
                 </div>
                 <div class="book-card-body" style="padding:0.75rem;">
                   <div class="book-card-title" style="font-size:0.9rem;">${escapeHtml(b.title)}</div>
@@ -977,7 +1001,8 @@ const Components = (() => {
                 </div>
               </div>
             </div>
-          `).join('')
+          `;
+          }).join('')
         : '<div class="empty-state"><div class="empty-state-icon">🕐</div><p class="empty-state-text">Aún no has visto ningún documento.</p></div>';
 
       tabContentHtml = `
@@ -1157,7 +1182,23 @@ const Components = (() => {
             <p class="section-subtitle">Actualiza la información de tu documento</p>
           </div>
         </div>
-        <form class="upload-form" onsubmit="App.handleEditBook(event, ${book.id})">
+        <form class="upload-form" id="edit-book-form" onsubmit="App.handleEditBook(event, ${book.id})">
+          <div class="form-group">
+            <label class="form-label">Imagen de Portada Actual</label>
+            <div class="cover-current">
+              ${book.cover_url
+                ? `<img src="${escapeHtml(book.cover_url)}" alt="Portada actual" class="cover-current-img" />`
+                : `<div class="cover-current-placeholder">Sin portada personalizada</div>`
+              }
+            </div>
+            <div class="cover-upload-zone" id="cover-drop-zone" onclick="document.getElementById('cover-input').click()">
+              <div class="cover-upload-icon">🖼️</div>
+              <p class="cover-upload-text">Cambiar imagen de portada</p>
+              <p class="cover-upload-formats">Formatos: JPG, PNG, WebP (máx. 5 MB)</p>
+            </div>
+            <input type="file" id="cover-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" />
+            <div id="cover-preview"></div>
+          </div>
           <div class="form-group">
             <label class="form-label">Título <span class="required">*</span></label>
             <input type="text" class="form-input" id="edit-title" value="${escapeHtml(book.title)}" required />

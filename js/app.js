@@ -758,12 +758,27 @@ const App = (() => {
       }
     }
 
-    // Step 2: Create book record with file URL
+    // Step 2: Upload cover image to Supabase Storage (if cover selected)
+    let coverUrl = '';
+    const coverInput = document.getElementById('cover-input');
+    if (coverInput && coverInput.files.length > 0) {
+      try {
+        Components.showToast('🖼️ Subiendo portada...', 'info');
+        coverUrl = await Store.uploadBookFile(coverInput.files[0]);
+      } catch (coverErr) {
+        console.error('Cover upload error:', coverErr);
+        Components.showToast('Error al subir la portada: ' + (coverErr.message || coverErr.error?.message || 'Error desconocido'), 'error');
+        // Continue without cover - not critical
+      }
+    }
+
+    // Step 3: Create book record with file URL and cover URL
     try {
       const { book } = await Store.addBookJSON({
         title, author, category, description,
         tags: _currentTags,
         file_url: fileUrl,
+        cover_url: coverUrl,
       });
       Components.showToast('¡Documento subido exitosamente! 🎉', 'success');
       Router.navigate('/book/' + book.id);
@@ -922,6 +937,8 @@ const App = (() => {
     const tagsWrapper = document.getElementById('tags-wrapper');
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
+    const coverDropZone = document.getElementById('cover-drop-zone');
+    const coverInput = document.getElementById('cover-input');
 
     if (tagsInput) {
       tagsInput.addEventListener('keydown', (e) => {
@@ -956,6 +973,30 @@ const App = (() => {
       fileInput.addEventListener('change', () => {
         if (fileInput.files.length) {
           _showFilePreview(fileInput.files[0]);
+        }
+      });
+    }
+
+    // Cover image drag & drop and change
+    if (coverDropZone && coverInput) {
+      coverDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        coverDropZone.classList.add('dragover');
+      });
+      coverDropZone.addEventListener('dragleave', () => {
+        coverDropZone.classList.remove('dragover');
+      });
+      coverDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        coverDropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+          coverInput.files = e.dataTransfer.files;
+          _showCoverPreview(e.dataTransfer.files[0]);
+        }
+      });
+      coverInput.addEventListener('change', () => {
+        if (coverInput.files.length) {
+          _showCoverPreview(coverInput.files[0]);
         }
       });
     }
@@ -995,10 +1036,34 @@ const App = (() => {
     `;
   }
 
+  function _showCoverPreview(file) {
+    const preview = document.getElementById('cover-preview');
+    if (!preview || !file) return;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    const url = URL.createObjectURL(file);
+    preview.innerHTML = `
+      <div class="cover-preview">
+        <img src="${url}" alt="Vista previa de portada" class="cover-preview-img" />
+        <div class="cover-preview-info">
+          <div class="cover-preview-name">${Components.escapeHtml(file.name)}</div>
+          <div class="cover-preview-size">${sizeMB} MB</div>
+        </div>
+        <button class="cover-preview-remove" type="button" onclick="App.clearCover()">✕ Quitar</button>
+      </div>
+    `;
+  }
+
   function clearFile() {
     const fileInput = document.getElementById('file-input');
     const preview = document.getElementById('file-preview');
     if (fileInput) fileInput.value = '';
+    if (preview) preview.innerHTML = '';
+  }
+
+  function clearCover() {
+    const coverInput = document.getElementById('cover-input');
+    const preview = document.getElementById('cover-preview');
+    if (coverInput) coverInput.value = '';
     if (preview) preview.innerHTML = '';
   }
 
@@ -1177,8 +1242,27 @@ const App = (() => {
       return;
     }
 
+    // Handle cover image upload if selected
+    let coverUrl = undefined;
+    const coverInput = document.getElementById('cover-input');
+    if (coverInput && coverInput.files.length > 0) {
+      try {
+        Components.showToast('🖼️ Subiendo nueva portada...', 'info');
+        coverUrl = await Store.uploadBookFile(coverInput.files[0]);
+      } catch (coverErr) {
+        console.error('Cover upload error:', coverErr);
+        Components.showToast('Error al subir la portada: ' + (coverErr.message || coverErr.error?.message || 'Error desconocido'), 'error');
+        // Continue without updating cover
+        coverUrl = undefined;
+      }
+    }
+
     try {
-      await Store.updateBook(bookId, { title, author, category, description });
+      const updates = { title, author, category, description };
+      if (coverUrl !== undefined) {
+        updates.cover_url = coverUrl;
+      }
+      await Store.updateBook(bookId, updates);
       Components.showToast('Documento actualizado ✅', 'success');
       Router.navigate('/book/' + bookId);
     } catch (err) {
@@ -1299,6 +1383,7 @@ const App = (() => {
     switchProfileTab,
     removeTag,
     clearFile,
+    clearCover,
     toggleMobileMenu,
     toggleDarkMode,
     switchAdminTab,

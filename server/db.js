@@ -209,7 +209,7 @@ const Store = {
     return { books, total, page, totalPages, perPage };
   },
 
-  async createBook({ title, author, category, description, file_url, user_id, tags }) {
+  async createBook({ title, author, category, description, file_url, cover_url, user_id, tags }) {
     const { data: book, error } = await supabase
       .from('books')
       .insert({
@@ -218,6 +218,7 @@ const Store = {
         category,
         description: description || '',
         file_url: file_url || '',
+        cover_url: cover_url || '',
         user_id: user_id,
         tags: tags || [],
         created_at: new Date().toISOString(),
@@ -256,6 +257,11 @@ const Store = {
       if (updates[key] !== undefined) {
         patch[key] = String(updates[key]).trim();
       }
+    }
+
+    // Handle cover_url
+    if (updates.cover_url !== undefined) {
+      patch.cover_url = updates.cover_url;
     }
 
     // Update tags if provided (stored as ARRAY)

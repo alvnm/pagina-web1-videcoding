@@ -2712,3 +2712,176 @@ body.dark-mode .doc-viewer-container {
 body.dark-mode .doc-viewer-header {
   background: #0d0907;
 }
+
+/* ============================================
+   Cover Image Styles
+   ============================================ */
+
+/* Book card cover image */
+.book-card-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Detail page cover image */
+.detail-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+/* Cover upload zone */
+.cover-upload-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--color-bg-secondary);
+}
+
+.cover-upload-zone:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.cover-upload-zone.dragover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.cover-upload-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.cover-upload-text {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.cover-upload-formats {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* Cover preview */
+.cover-preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  margin-top: 0.75rem;
+}
+
+.cover-preview-img {
+  width: 80px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.cover-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cover-preview-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cover-preview-size {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.cover-preview-remove {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.cover-preview-remove:hover {
+  background: var(--color-danger-dark);
+}
+
+/* Current cover display in edit form */
+.cover-current {
+  margin-bottom: 0.75rem;
+}
+
+.cover-current-img {
+  width: 120px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
+.cover-current-placeholder {
+  width: 120px;
+  height: 160px;
+  background: var(--color-bg-secondary);
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 0.5rem;
+}
+
+/* Dark mode adjustments for cover */
+body.dark-mode .cover-upload-zone {
+  background: #1a1210;
+  border-color: #3a2a1a;
+}
+
+body.dark-mode .cover-upload-zone:hover {
+  background: #2a1a10;
+  border-color: #8d6e63;
+}
+
+body.dark-mode .cover-preview {
+  background: #1a1210;
+}
+
+body.dark-mode .cover-current-placeholder {
+  background: #1a1210;
+  border-color: #3a2a1a;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .cover-preview {
+    flex-wrap: wrap;
+  }
+  
+  .cover-preview-img {
+    width: 60px;
+    height: 80px;
+  }
+}
