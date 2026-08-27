@@ -36,7 +36,7 @@ const Store = {
     const { data, error } = await supabase
       .from('users')
       .select('id, name, email, role, created_at')
-      .eq('id', Number(id))
+      .eq('id', id)
       .limit(1);
     if (error && error.code !== 'PGRST116') {
       console.error('❌ findUserById error:', error.message);
@@ -48,7 +48,7 @@ const Store = {
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('id', Number(id))
+      .eq('id', id)
       .limit(1);
     if (error && error.code !== 'PGRST116') {
       console.error('❌ findUserByIdFull error:', error.message);
@@ -70,7 +70,6 @@ const Store = {
   },
 
   async updateUser(userId, updates) {
-    userId = Number(userId);
     const { data, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).limit(1);
     const user = (data && data.length > 0) ? data[0] : null;
     if (!user) return null;
@@ -134,7 +133,7 @@ const Store = {
   },
 
   async bookById(id) {
-    const { data: book } = await supabase.from('books').select('*').eq('id', Number(id)).single();
+    const { data: book } = await supabase.from('books').select('*').eq('id', id).single();
     if (!book) return null;
     const [enriched] = await this._enrichBooks([book]);
     return enriched;
@@ -144,7 +143,7 @@ const Store = {
     const { data } = await supabase
       .from('books')
       .select('*')
-      .eq('uploader_id', Number(userId))
+      .eq('uploader_id', userId)
       .order('created_at', { ascending: false });
     return this._enrichBooks(data || []);
   },
@@ -221,7 +220,7 @@ const Store = {
         file_type: file_type || 'PDF',
         file_name: file_name || '',
         file_path: file_path || '',
-        uploader_id: Number(uploader_id),
+        uploader_id: uploader_id,
         created_at: new Date().toISOString().slice(0, 10),
         downloads: 0,
       })
@@ -243,16 +242,14 @@ const Store = {
 
   async incrementDownload(bookId) {
     // First get current count
-    const { data: book } = await supabase.from('books').select('downloads').eq('id', Number(bookId)).single();
+    const { data: book } = await supabase.from('books').select('downloads').eq('id', bookId).single();
     if (!book) return 0;
     const newCount = (book.downloads || 0) + 1;
-    await supabase.from('books').update({ downloads: newCount }).eq('id', Number(bookId));
+    await supabase.from('books').update({ downloads: newCount }).eq('id', bookId);
     return newCount;
   },
 
   async updateBook(bookId, userId, updates) {
-    bookId = Number(bookId);
-    userId = Number(userId);
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return null;
     if (book.uploader_id !== userId) return { error: 'forbidden' };
@@ -284,8 +281,6 @@ const Store = {
   },
 
   async deleteBook(bookId, userId) {
-    bookId = Number(bookId);
-    userId = Number(userId);
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return { error: 'not_found' };
     if (book.uploader_id !== userId) return { error: 'forbidden' };
@@ -338,8 +333,6 @@ const Store = {
   // ===================== Favorites =====================
 
   async toggleFavorite(userId, bookId) {
-    userId = Number(userId);
-    bookId = Number(bookId);
     const { data: existing } = await supabase
       .from('favorites')
       .select('*')
@@ -360,14 +353,14 @@ const Store = {
     const { data } = await supabase
       .from('favorites')
       .select('*')
-      .eq('user_id', Number(userId))
-      .eq('book_id', Number(bookId))
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
       .limit(1);
     return data && data.length > 0;
   },
 
   async favoritesByUser(userId) {
-    const { data: favRows } = await supabase.from('favorites').select('book_id').eq('user_id', Number(userId));
+    const { data: favRows } = await supabase.from('favorites').select('book_id').eq('user_id', userId);
     if (!favRows || favRows.length === 0) return [];
     const bookIds = favRows.map(f => f.book_id);
     const { data: books } = await supabase.from('books').select('*').in('id', bookIds);
@@ -378,15 +371,13 @@ const Store = {
     const { count } = await supabase
       .from('favorites')
       .select('*', { count: 'exact', head: true })
-      .eq('book_id', Number(bookId));
+      .eq('book_id', bookId);
     return count || 0;
   },
 
   // ===================== Reading History =====================
 
   async addReadingHistory(userId, bookId) {
-    userId = Number(userId);
-    bookId = Number(bookId);
     // Upsert: delete existing and insert new
     await supabase.from('reading_history').delete().eq('user_id', userId).eq('book_id', bookId);
     await supabase.from('reading_history').insert({ user_id: userId, book_id: bookId, viewed_at: new Date().toISOString() });
@@ -406,7 +397,7 @@ const Store = {
     const { data: historyRows } = await supabase
       .from('reading_history')
       .select('book_id, viewed_at')
-      .eq('user_id', Number(userId))
+      .eq('user_id', userId)
       .order('viewed_at', { ascending: false })
       .limit(10);
     if (!historyRows || historyRows.length === 0) return [];
@@ -421,8 +412,6 @@ const Store = {
   // ===================== Ratings =====================
 
   async setRating(userId, bookId, score) {
-    userId = Number(userId);
-    bookId = Number(bookId);
     score = Math.max(1, Math.min(5, Math.round(Number(score))));
 
     const { data: existing } = await supabase
@@ -441,7 +430,6 @@ const Store = {
   },
 
   async getRatingStats(bookId) {
-    bookId = Number(bookId);
     const { data: ratings } = await supabase.from('ratings').select('score').eq('book_id', bookId);
     if (!ratings || ratings.length === 0) return { average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
     const sum = ratings.reduce((s, r) => s + r.score, 0);
@@ -458,8 +446,8 @@ const Store = {
     const { data } = await supabase
       .from('ratings')
       .select('score')
-      .eq('user_id', Number(userId))
-      .eq('book_id', Number(bookId))
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
       .limit(1)
       .single();
     return data ? data.score : 0;
@@ -468,7 +456,6 @@ const Store = {
   // ===================== Comments =====================
 
   async getComments(bookId, { page = 1, perPage = 20 } = {}) {
-    bookId = Number(bookId);
     const offset = (page - 1) * perPage;
 
     const { data: comments, count: total } = await supabase
@@ -494,8 +481,6 @@ const Store = {
   },
 
   async addComment(userId, bookId, text) {
-    userId = Number(userId);
-    bookId = Number(bookId);
     if (!text || !text.trim()) return null;
 
     const { data: comment, error } = await supabase
@@ -513,8 +498,6 @@ const Store = {
   },
 
   async deleteComment(commentId, userId) {
-    commentId = Number(commentId);
-    userId = Number(userId);
     const { data: comment } = await supabase.from('comments').select('*').eq('id', commentId).single();
     if (!comment) return { error: 'not_found' };
     if (comment.user_id !== userId) return { error: 'forbidden' };
@@ -525,11 +508,10 @@ const Store = {
   // ===================== Views =====================
 
   async addView(userId, bookId) {
-    bookId = Number(bookId);
     const { data: book } = await supabase.from('books').select('downloads').eq('id', bookId).single();
     if (!book) return null;
     if (userId) {
-      await this.addReadingHistory(Number(userId), bookId);
+      await this.addReadingHistory(userId, bookId);
     }
     return book.downloads || 0;
   },
@@ -537,7 +519,7 @@ const Store = {
   // ===================== Admin =====================
 
   async isAdmin(userId) {
-    const { data: user } = await supabase.from('users').select('role').eq('id', Number(userId)).single();
+    const { data: user } = await supabase.from('users').select('role').eq('id', userId).single();
     return user && user.role === 'admin';
   },
 
@@ -562,7 +544,6 @@ const Store = {
   },
 
   async adminDeleteBook(bookId) {
-    bookId = Number(bookId);
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return { error: 'not_found' };
     await supabase.from('books').delete().eq('id', bookId);
@@ -570,7 +551,6 @@ const Store = {
   },
 
   async adminDeleteUser(userId) {
-    userId = Number(userId);
     const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
     if (!user) return { error: 'not_found' };
 
@@ -589,7 +569,6 @@ const Store = {
   },
 
   async adminSetUserRole(userId, role) {
-    userId = Number(userId);
     if (!['admin', 'user'].includes(role)) return { error: 'invalid_role' };
 
     const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();

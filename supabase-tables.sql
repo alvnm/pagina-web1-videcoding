@@ -2,10 +2,12 @@
 -- Tablas de la Biblioteca Comunitaria Virtual
 -- Ejecutar en: Supabase Dashboard → SQL Editor → Run
 -- ============================================
+-- NOTA: Este esquema usa UUID para las PKs,
+-- compatible con tu base de datos de Supabase.
 
 -- 1. Usuarios
 CREATE TABLE IF NOT EXISTS users (
-  id BIGSERIAL PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
@@ -15,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 2. Libros
 CREATE TABLE IF NOT EXISTS books (
-  id BIGSERIAL PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   author TEXT NOT NULL,
   category TEXT NOT NULL,
@@ -23,39 +25,42 @@ CREATE TABLE IF NOT EXISTS books (
   file_type TEXT DEFAULT 'PDF',
   file_name TEXT DEFAULT '',
   file_path TEXT DEFAULT '',
-  uploader_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-  created_at DATE DEFAULT CURRENT_DATE,
-  downloads INT DEFAULT 0
+  user_id UUID,
+  uploader_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  tags ARRAY,
+  downloads INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 3. Etiquetas
 CREATE TABLE IF NOT EXISTS tags (
-  book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
   PRIMARY KEY (book_id, tag)
 );
 
 -- 4. Favoritos
 CREATE TABLE IF NOT EXISTS favorites (
-  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-  book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (user_id, book_id)
+  UNIQUE(user_id, book_id)
 );
 
 -- 5. Historial de lectura
 CREATE TABLE IF NOT EXISTS reading_history (
-  id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-  book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
   viewed_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, book_id)
 );
 
 -- 6. Calificaciones
 CREATE TABLE IF NOT EXISTS ratings (
-  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-  book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
   score INT NOT NULL CHECK (score >= 1 AND score <= 5),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, book_id)
@@ -63,9 +68,9 @@ CREATE TABLE IF NOT EXISTS ratings (
 
 -- 7. Comentarios
 CREATE TABLE IF NOT EXISTS comments (
-  id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-  book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
