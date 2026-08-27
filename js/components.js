@@ -387,7 +387,7 @@ const Components = (() => {
   function renderBookCard(book, showFavorite = false, isFavorite = false) {
     const favBtn = showFavorite ? `
       <button class="book-card-fav ${isFavorite ? 'active' : ''}"
-        onclick="event.stopPropagation();App.toggleFavoriteCard(${book.id},this)"
+        onclick="event.stopPropagation();App.toggleFavoriteCard('${book.id}',this)"
         title="${isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
         ${isFavorite ? '❤️' : '🤍'}
       </button>
@@ -684,7 +684,7 @@ const Components = (() => {
       ownerActions = `
         <div class="detail-owner-actions">
           <a href="#/book/${book.id}/edit" class="btn btn-secondary btn-sm">✏️ Editar</a>
-          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteBook(${book.id}, '${escapeHtml(book.title).replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteBook('${book.id}', '${escapeHtml(book.title).replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
         </div>
       `;
     }
@@ -692,7 +692,7 @@ const Components = (() => {
     // Favorite button
     const favBtn = `
       <button class="btn btn-lg ${isFavorite ? 'btn-fav-active' : 'btn-secondary'}"
-        onclick="App.toggleFavoriteDetail(${book.id})" id="detail-fav-btn">
+        onclick="App.toggleFavoriteDetail('${book.id}')" id="detail-fav-btn">
         ${isFavorite ? '❤️' : '🤍'} ${isFavorite ? 'En Favoritos' : 'Favorito'}
         <span class="fav-count" id="detail-fav-count">${favCount || ''}</span>
       </button>
@@ -700,7 +700,7 @@ const Components = (() => {
 
     // Share URL
     const shareBtn = `
-      <button class="btn btn-secondary btn-lg" onclick="App.shareBook(${book.id})">
+      <button class="btn btn-secondary btn-lg" onclick="App.shareBook('${book.id}')">
         🔗 Compartir
       </button>
     `;
@@ -730,7 +730,7 @@ const Components = (() => {
             ${tagsHtml ? `<div class="detail-tags">${tagsHtml}</div>` : ''}
             <div class="detail-actions">
               ${book.file_url ? `
-                <a href="/api/books/${book.id}/download" class="btn btn-primary btn-lg" onclick="event.preventDefault();App.downloadBook(${book.id})">
+                <a href="/api/books/${book.id}/download" class="btn btn-primary btn-lg" onclick="event.preventDefault();App.downloadBook('${book.id}')">
                   ⬇️ Descargar
                 </a>
               ` : ''}
@@ -788,7 +788,7 @@ const Components = (() => {
         <div class="rating-interactive" id="rating-interactive">
           <span class="rating-label">Tu calificación:</span>
           <div class="rating-stars-input">
-            ${[1,2,3,4,5].map(i => `<button class="rating-star-btn ${i <= userRating ? 'active' : ''}" onclick="App.rateBook(${bookId}, ${i})" title="${i} estrella${i>1?'s':''}">★</button>`).join('')}
+            ${[1,2,3,4,5].map(i => `<button class="rating-star-btn ${i <= userRating ? 'active' : ''}" onclick="App.rateBook('${bookId}', ${i})" title="${i} estrella${i>1?'s':''}">★</button>`).join('')}
           </div>
         </div>
       `;
@@ -822,7 +822,7 @@ const Components = (() => {
         <textarea class="comment-textarea" id="comment-textarea" placeholder="Escribe tu comentario..." maxlength="1000"></textarea>
         <div class="comment-form-footer">
           <span class="comment-char-count" id="comment-char-count">0/1000</span>
-          <button class="btn btn-primary btn-sm" onclick="App.addComment(${bookId})">💬 Comentar</button>
+          <button class="btn btn-primary btn-sm" onclick="App.addComment('${bookId}')">💬 Comentar</button>
         </div>
       </div>
     `;
@@ -842,7 +842,7 @@ const Components = (() => {
               <span class="comment-author">${escapeHtml(c.user_name)}</span>
               <span class="comment-date">${formatDateTime(c.created_at)}</span>
             </div>
-            ${isAuthor ? `<button class="comment-delete" onclick="App.deleteComment(${bookId}, ${c.id})" title="Eliminar comentario">🗑️</button>` : ''}
+            ${isAuthor ? `<button class="comment-delete" onclick="App.deleteComment('${bookId}', '${c.id}')" title="Eliminar comentario">🗑️</button>` : ''}
           </div>
           <div class="comment-text">${escapeHtml(c.text)}</div>
         </div>
@@ -1326,10 +1326,10 @@ const Components = (() => {
                   <td>
                     <div class="admin-actions">
                       ${u.id !== session.id ? `
-                        <button class="btn btn-sm btn-secondary" onclick="App.adminToggleRole(${u.id}, '${u.role}')">
+                        <button class="btn btn-sm btn-secondary" onclick="App.adminToggleRole('${u.id}', '${u.role}')">
                           ${u.role === 'admin' ? '⬇️ Quitar Admin' : '⬆️ Hacer Admin'}
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteUser(${u.id}, '${escapeHtml(u.name)}')">
+                        <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteUser('${u.id}', '${escapeHtml(u.name)}')">
                           🗑️
                         </button>
                       ` : '<span class="text-muted">Tú</span>'}
@@ -1373,7 +1373,7 @@ const Components = (() => {
                   <td>${b.downloads || 0}</td>
                   <td>${formatDate(b.created_at)}</td>
                   <td>
-                    <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteBook(${b.id}, '${escapeHtml(b.title).replace(/'/g, "\\'")}')">
+                    <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteBook('${b.id}', '${escapeHtml(b.title).replace(/'/g, "\\'")}')">
                       🗑️ Eliminar
                     </button>
                   </td>
