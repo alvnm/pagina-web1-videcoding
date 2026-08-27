@@ -13,6 +13,23 @@ const Components = (() => {
     return div.innerHTML;
   }
 
+  /** Escape a string for safe use inside HTML attribute onclick="..."
+   *  1) JS-escape: backslash, single-quote, newlines
+   *  2) HTML-entity-encode: double-quote, ampersand, angle brackets
+   */
+  function escapeAttr(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/\\/g, '\\\\')   // backslash → \\
+      .replace(/'/g, "\\'")      // single-quote → \\'
+      .replace(/"/g, '&quot;')     // double-quote → &quot;
+      .replace(/&/g, '&amp;')       // ampersand → &amp;
+      .replace(/</g, '&lt;')        // < → &lt;
+      .replace(/>/g, '&gt;')        // > → &gt;
+      .replace(/\n/g, '\\n')      // newline → \\n
+      .replace(/\r/g, '\\r');     // CR → \\r
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr + 'T00:00:00');
@@ -684,7 +701,7 @@ const Components = (() => {
       ownerActions = `
         <div class="detail-owner-actions">
           <a href="#/book/${book.id}/edit" class="btn btn-secondary btn-sm">✏️ Editar</a>
-          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteBook('${book.id}', '${escapeHtml(book.title).replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteBook('${book.id}', '${escapeAttr(book.title)}')">🗑️ Eliminar</button>
         </div>
       `;
     }
@@ -1329,7 +1346,7 @@ const Components = (() => {
                         <button class="btn btn-sm btn-secondary" onclick="App.adminToggleRole('${u.id}', '${u.role}')">
                           ${u.role === 'admin' ? '⬇️ Quitar Admin' : '⬆️ Hacer Admin'}
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteUser('${u.id}', '${escapeHtml(u.name)}')">
+                        <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteUser('${u.id}', '${escapeAttr(u.name)}')">
                           🗑️
                         </button>
                       ` : '<span class="text-muted">Tú</span>'}
@@ -1373,7 +1390,7 @@ const Components = (() => {
                   <td>${b.downloads || 0}</td>
                   <td>${formatDate(b.created_at)}</td>
                   <td>
-                    <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteBook('${b.id}', '${escapeHtml(b.title).replace(/'/g, "\\'")}')">
+                    <button class="btn btn-sm btn-danger" onclick="App.adminConfirmDeleteBook('${b.id}', '${escapeAttr(b.title)}')">
                       🗑️ Eliminar
                     </button>
                   </td>
