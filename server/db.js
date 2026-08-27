@@ -21,33 +21,39 @@ const Store = {
   // ===================== Users =====================
 
   async findUserByEmail(email) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .ilike('email', email)
-      .limit(1)
-      .single();
-    return data || null;
+      .limit(1);
+    if (error && error.code !== 'PGRST116') {
+      console.error('❌ findUserByEmail error:', error.message);
+    }
+    return (data && data.length > 0) ? data[0] : null;
   },
 
   async findUserById(id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('id, name, email, role, created_at')
       .eq('id', Number(id))
-      .limit(1)
-      .single();
-    return data || null;
+      .limit(1);
+    if (error && error.code !== 'PGRST116') {
+      console.error('❌ findUserById error:', error.message);
+    }
+    return (data && data.length > 0) ? data[0] : null;
   },
 
   async findUserByIdFull(id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', Number(id))
-      .limit(1)
-      .single();
-    return data || null;
+      .limit(1);
+    if (error && error.code !== 'PGRST116') {
+      console.error('❌ findUserByIdFull error:', error.message);
+    }
+    return (data && data.length > 0) ? data[0] : null;
   },
 
   async createUser(name, email, hashedPassword) {
@@ -56,13 +62,17 @@ const Store = {
       .insert({ name, email: email.toLowerCase(), password: hashedPassword, role: 'user', created_at: new Date().toISOString().slice(0, 10) })
       .select('id, name, email, role, created_at')
       .single();
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase createUser error:', error.message, 'Code:', error.code, 'Details:', error.details);
+      throw error;
+    }
     return data;
   },
 
   async updateUser(userId, updates) {
     userId = Number(userId);
-    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+    const { data, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).limit(1);
+    const user = (data && data.length > 0) ? data[0] : null;
     if (!user) return null;
 
     const patch = {};
@@ -88,12 +98,13 @@ const Store = {
       return { id: user.id, name: user.name, email: user.email, created_at: user.created_at };
     }
 
-    const { data: updated } = await supabase
+    const { data: updatedData, error: updateError } = await supabase
       .from('users')
       .update(patch)
       .eq('id', userId)
-      .select('id, name, email, created_at')
-      .single();
+      .select('id, name, email, created_at');
+    if (updateError) console.error('❌ updateUser error:', updateError.message);
+    const updated = (updatedData && updatedData.length > 0) ? updatedData[0] : null;
 
     return updated || { id: user.id, name: patch.name || user.name, email: patch.email || user.email, created_at: user.created_at };
   },

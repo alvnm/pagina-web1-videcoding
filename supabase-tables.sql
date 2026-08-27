@@ -45,10 +45,11 @@ CREATE TABLE IF NOT EXISTS favorites (
 
 -- 5. Historial de lectura
 CREATE TABLE IF NOT EXISTS reading_history (
+  id BIGSERIAL PRIMARY KEY,
   user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
   book_id BIGINT REFERENCES books(id) ON DELETE CASCADE,
   viewed_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (user_id, book_id)
+  UNIQUE(user_id, book_id)
 );
 
 -- 6. Calificaciones
@@ -68,3 +69,97 @@ CREATE TABLE IF NOT EXISTS comments (
   text TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================
+-- POLÍTICAS RLS (Row Level Security)
+-- Necesarias para que el backend funcione con
+-- la anon key de Supabase
+-- ============================================
+
+-- Habilitar RLS en todas las tablas
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE books ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+
+-- ---------- users ----------
+CREATE POLICY "users_select_public" ON users
+  FOR SELECT USING (true);
+
+CREATE POLICY "users_insert_public" ON users
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "users_update_public" ON users
+  FOR UPDATE USING (true);
+
+CREATE POLICY "users_delete_public" ON users
+  FOR DELETE USING (true);
+
+-- ---------- books ----------
+CREATE POLICY "books_select_public" ON books
+  FOR SELECT USING (true);
+
+CREATE POLICY "books_insert_public" ON books
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "books_update_public" ON books
+  FOR UPDATE USING (true);
+
+CREATE POLICY "books_delete_public" ON books
+  FOR DELETE USING (true);
+
+-- ---------- tags ----------
+CREATE POLICY "tags_select_public" ON tags
+  FOR SELECT USING (true);
+
+CREATE POLICY "tags_insert_public" ON tags
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "tags_delete_public" ON tags
+  FOR DELETE USING (true);
+
+-- ---------- favorites ----------
+CREATE POLICY "favorites_select_public" ON favorites
+  FOR SELECT USING (true);
+
+CREATE POLICY "favorites_insert_public" ON favorites
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "favorites_delete_public" ON favorites
+  FOR DELETE USING (true);
+
+-- ---------- reading_history ----------
+CREATE POLICY "reading_history_select_public" ON reading_history
+  FOR SELECT USING (true);
+
+CREATE POLICY "reading_history_insert_public" ON reading_history
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "reading_history_delete_public" ON reading_history
+  FOR DELETE USING (true);
+
+CREATE POLICY "reading_history_update_public" ON reading_history
+  FOR UPDATE USING (true);
+
+-- ---------- ratings ----------
+CREATE POLICY "ratings_select_public" ON ratings
+  FOR SELECT USING (true);
+
+CREATE POLICY "ratings_insert_public" ON ratings
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "ratings_update_public" ON ratings
+  FOR UPDATE USING (true);
+
+-- ---------- comments ----------
+CREATE POLICY "comments_select_public" ON comments
+  FOR SELECT USING (true);
+
+CREATE POLICY "comments_insert_public" ON comments
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "comments_delete_public" ON comments
+  FOR DELETE USING (true);

@@ -29,11 +29,27 @@ router.post('/register', async (req, res) => {
     const hash = bcrypt.hashSync(password, 10);
     const user = await Store.createUser(name.trim(), email.trim(), hash);
 
+    if (!user) {
+      return res.status(500).json({ error: 'No se pudo crear el usuario.' });
+    }
+
     req.session.user = { id: user.id, name: user.name, email: user.email, role: user.role || 'user' };
     res.status(201).json({ user: req.session.user });
   } catch (err) {
-    console.error('❌ Register error:', err.message);
-    res.status(500).json({ error: 'Error al crear la cuenta.' });
+    console.error('❌ Register error:', err.message || err);
+
+    // Provide more specific error messages based on Supabase error codes
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo electrónico.' });
+    }
+    if (err.code === '42501') {
+      return res.status(500).json({ error: 'Error de permisos en la base de datos. Verifica las políticas RLS de Supabase.' });
+    }
+    if (err.message && err.message.includes('RLS')) {
+      return res.status(500).json({ error: 'Error de permisos en la base de datos. Las políticas RLS no están configuradas correctamente.' });
+    }
+
+    res.status(500).json({ error: 'Error al crear la cuenta. Inténtalo de nuevo.' });
   }
 });
 
@@ -58,7 +74,10 @@ router.post('/login', async (req, res) => {
     req.session.user = { id: user.id, name: user.name, email: user.email, role: user.role || 'user' };
     res.json({ user: req.session.user });
   } catch (err) {
-    console.error('❌ Login error:', err.message);
+    console.error('❌ Login error:', err.message, 'Code:', err.code);
+    if (err.code === '42501') {
+      return res.status(500).json({ error: 'Error de permisos en la base de datos. Verifica las políticas RLS.' });
+    }
     res.status(500).json({ error: 'Error al iniciar sesión.' });
   }
 });
