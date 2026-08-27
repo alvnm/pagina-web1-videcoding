@@ -1,216 +1,311 @@
 /* ============================================
-   Store — JSON file persistence (zero native deps)
+   Store — Supabase database persistence
    ============================================ */
 
-const fs = require('fs');
-const path = require('path');
 const bcrypt = require('bcryptjs');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'biblioteca.json');
+const supabase = require('./supabase');
 
 // ---- Helpers ----
-let _writeAttempts = 0;
-
-function _readDB() {
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-function _writeDB(data) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-    _writeAttempts = 0; // Reset on success
-  } catch (err) {
-    _writeAttempts++;
-    if (_writeAttempts <= 5) {
-      console.warn('⚠️  No se pudo escribir la base de datos:', err.message);
-    }
-    // Don't permanently disable — retry next time
-  }
-}
-
-function _nextId(collection) {
-  const items = _db[collection] || [];
-  if (items.length === 0) return 1;
-  return Math.max(...items.map(i => i.id)) + 1;
-}
-
-// ---- In-memory DB ----
-let _db = _readDB();
-
-function _seedIfEmpty() {
-  if (_db && _db.users && _db.users.length > 0) {
-    // Ensure new collections exist even on old DB files
-    if (!_db.favorites) _db.favorites = [];
-    if (!_db.reading_history) _db.reading_history = [];
-    if (!_db.ratings) _db.ratings = [];
-    if (!_db.comments) _db.comments = [];
-    return;
-  }
-
-  _db = {
-    users: [],
-    books: [],
-    tags: [],
-    favorites: [],
-    reading_history: [],
-    ratings: [],
-    comments: [],
-  };
-
-  _writeDB(_db);
-  console.log('✅ Database initialized (empty)');
-}
-
-// Ensure collections exist on existing DB files
-if (_db && !_db.favorites) { _db.favorites = []; _writeDB(_db); }
-if (_db && !_db.reading_history) { _db.reading_history = []; _writeDB(_db); }
-if (_db && !_db.ratings) { _db.ratings = []; _writeDB(_db); }
-if (_db && !_db.comments) { _db.comments = []; _writeDB(_db); }
-
-_seedIfEmpty();
-
-// ---- Query helpers ----
-function _getTagsForBook(bookId) {
-  return (_db.tags || []).filter(t => t.book_id === bookId).map(t => t.tag);
-}
 
 function _enrichBook(book) {
   if (!book) return null;
-  const uploader = _db.users.find(u => u.id === book.uploader_id);
   return {
     ...book,
-    tags: _getTagsForBook(book.id),
-    uploader_name: uploader ? uploader.name : 'Desconocido',
+    tags: book._tags || [],
+    uploader_name: book._uploader_name || 'Desconocido',
   };
 }
 
 // Public query API
 const Store = {
-  // Users
-  findUserByEmail(email) {
-    return _db.users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+  // ===================== Users =====================
+
+  async findUserByEmail(email) {
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .ilike('email', email)
+      .limit(1)
+      .single();
+    return data || null;
   },
 
-  findUserById(id) {
-    const u = _db.users.find(u => u.id === Number(id));
-    if (!u) return null;
-    return { id: u.id, name: u.name, email: u.email, role: u.role || 'user', created_at: u.created_at };
+  async findUserById(id) {
+    const { data } = await supabase
+      .from('users')
+      .select('id, name, email, role, created_at')
+      .eq('id', Number(id))
+      .limit(1)
+      .single();
+    return data || null;
   },
 
-  createUser(name, email, hashedPassword) {
-    const id = _nextId('users');
-    const user = { id, name, email: email.toLowerCase(), password: hashedPassword, role: 'user', created_at: new Date().toISOString().slice(0, 10) };
-    _db.users.push(user);
-    _writeDB(_db);
-    return { id, name, email: user.email, role: user.role, created_at: user.created_at };
+  async findUserByIdFull(id) {
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', Number(id))
+      .limit(1)
+      .single();
+    return data || null;
   },
 
-  // Books
-  allBooks() {
-    return [..._db.books].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(_enrichBook);
+  async createUser(name, email, hashedPassword) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert({ name, email: email.toLowerCase(), password: hashedPassword, role: 'user', created_at: new Date().toISOString().slice(0, 10) })
+      .select('id, name, email, role, created_at')
+      .single();
+    if (error) throw error;
+    return data;
   },
 
-  bookById(id) {
-    return _enrichBook(_db.books.find(b => b.id === Number(id)));
+  async updateUser(userId, updates) {
+    userId = Number(userId);
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!user) return null;
+
+    const patch = {};
+    if (updates.name && updates.name.trim()) {
+      patch.name = updates.name.trim();
+    }
+    if (updates.email && updates.email.trim()) {
+      const newEmail = updates.email.trim().toLowerCase();
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('email', newEmail)
+        .neq('id', userId)
+        .limit(1);
+      if (existing && existing.length > 0) return { error: 'email_taken' };
+      patch.email = newEmail;
+    }
+    if (updates.password) {
+      patch.password = bcrypt.hashSync(updates.password, 10);
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { id: user.id, name: user.name, email: user.email, created_at: user.created_at };
+    }
+
+    const { data: updated } = await supabase
+      .from('users')
+      .update(patch)
+      .eq('id', userId)
+      .select('id, name, email, created_at')
+      .single();
+
+    return updated || { id: user.id, name: patch.name || user.name, email: patch.email || user.email, created_at: user.created_at };
   },
 
-  booksByUser(userId) {
-    return _db.books
-      .filter(b => b.uploader_id === Number(userId))
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .map(_enrichBook);
+  // ===================== Books =====================
+
+  async _enrichBooks(books) {
+    if (!books || books.length === 0) return [];
+    const enriched = [];
+    for (const book of books) {
+      // Get tags
+      const { data: tagRows } = await supabase.from('tags').select('tag').eq('book_id', book.id);
+      // Get uploader name
+      let uploaderName = 'Desconocido';
+      if (book.uploader_id) {
+        const { data: uploader } = await supabase.from('users').select('name').eq('id', book.uploader_id).single();
+        if (uploader) uploaderName = uploader.name;
+      }
+      enriched.push({ ...book, tags: (tagRows || []).map(t => t.tag), uploader_name: uploaderName });
+    }
+    return enriched;
   },
 
-  searchBooks({ query = '', category = '' } = {}) {
-    let books = [..._db.books];
+  async allBooks() {
+    const { data } = await supabase.from('books').select('*').order('created_at', { ascending: false });
+    return this._enrichBooks(data || []);
+  },
+
+  async bookById(id) {
+    const { data: book } = await supabase.from('books').select('*').eq('id', Number(id)).single();
+    if (!book) return null;
+    const [enriched] = await this._enrichBooks([book]);
+    return enriched;
+  },
+
+  async booksByUser(userId) {
+    const { data } = await supabase
+      .from('books')
+      .select('*')
+      .eq('uploader_id', Number(userId))
+      .order('created_at', { ascending: false });
+    return this._enrichBooks(data || []);
+  },
+
+  async searchBooks({ query = '', category = '' } = {}) {
+    let q = supabase.from('books').select('*');
 
     if (category) {
-      books = books.filter(b => b.category === category);
+      q = q.eq('category', category);
     }
 
     if (query.trim()) {
-      const q = query.toLowerCase().trim();
+      const search = query.toLowerCase().trim();
+      q = q.or(`title.ilike.%${search}%,author.ilike.%${search}%`);
+    }
+
+    const { data } = await q.order('created_at', { ascending: false });
+    let books = await this._enrichBooks(data || []);
+
+    // Filter by tags if query exists
+    if (query.trim()) {
+      const search = query.toLowerCase().trim();
       books = books.filter(b =>
-        b.title.toLowerCase().includes(q) ||
-        b.author.toLowerCase().includes(q) ||
-        _getTagsForBook(b.id).some(t => t.toLowerCase().includes(q))
+        b.title.toLowerCase().includes(search) ||
+        b.author.toLowerCase().includes(search) ||
+        (b.tags && b.tags.some(t => t.toLowerCase().includes(search)))
       );
     }
 
-    return books.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(_enrichBook);
+    return books;
   },
 
-  createBook({ title, author, category, description, file_type, file_name, file_path, uploader_id, tags }) {
-    const id = _nextId('books');
-    const book = {
-      id,
-      title,
-      author,
-      category,
-      description: description || '',
-      file_type: file_type || 'PDF',
-      file_name: file_name || '',
-      file_path: file_path || '',
-      uploader_id: Number(uploader_id),
-      created_at: new Date().toISOString().slice(0, 10),
-      downloads: 0,
-    };
-    _db.books.push(book);
+  async searchBooksPaginated({ query = '', category = '', page = 1, perPage = 12 } = {}) {
+    let q = supabase.from('books').select('*', { count: 'exact' });
 
-    // Tags
+    if (category) {
+      q = q.eq('category', category);
+    }
+
+    if (query.trim()) {
+      const search = query.toLowerCase().trim();
+      q = q.or(`title.ilike.%${search}%,author.ilike.%${search}%`);
+    }
+
+    const { data, count } = await q
+      .order('created_at', { ascending: false })
+      .range((page - 1) * perPage, page * perPage - 1);
+
+    let books = await this._enrichBooks(data || []);
+
+    // Filter by tags if query exists
+    if (query.trim()) {
+      const search = query.toLowerCase().trim();
+      books = books.filter(b =>
+        b.title.toLowerCase().includes(search) ||
+        b.author.toLowerCase().includes(search) ||
+        (b.tags && b.tags.some(t => t.toLowerCase().includes(search)))
+      );
+    }
+
+    const total = count || books.length;
+    const totalPages = Math.ceil(total / perPage);
+    return { books, total, page, totalPages, perPage };
+  },
+
+  async createBook({ title, author, category, description, file_type, file_name, file_path, uploader_id, tags }) {
+    const { data: book, error } = await supabase
+      .from('books')
+      .insert({
+        title,
+        author,
+        category,
+        description: description || '',
+        file_type: file_type || 'PDF',
+        file_name: file_name || '',
+        file_path: file_path || '',
+        uploader_id: Number(uploader_id),
+        created_at: new Date().toISOString().slice(0, 10),
+        downloads: 0,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    // Insert tags
     if (tags && tags.length) {
-      for (const tag of tags) {
-        if (tag.trim()) {
-          _db.tags.push({ book_id: id, tag: tag.trim() });
-        }
+      const tagInserts = tags.filter(t => t && t.trim()).map(t => ({ book_id: book.id, tag: t.trim() }));
+      if (tagInserts.length > 0) {
+        await supabase.from('tags').insert(tagInserts);
       }
     }
 
-    _writeDB(_db);
-    return _enrichBook(book);
+    const [enriched] = await this._enrichBooks([book]);
+    return enriched;
   },
 
-  incrementDownload(bookId) {
-    const book = _db.books.find(b => b.id === Number(bookId));
-    if (book) {
-      book.downloads = (book.downloads || 0) + 1;
-      _writeDB(_db);
+  async incrementDownload(bookId) {
+    // First get current count
+    const { data: book } = await supabase.from('books').select('downloads').eq('id', Number(bookId)).single();
+    if (!book) return 0;
+    const newCount = (book.downloads || 0) + 1;
+    await supabase.from('books').update({ downloads: newCount }).eq('id', Number(bookId));
+    return newCount;
+  },
+
+  async updateBook(bookId, userId, updates) {
+    bookId = Number(bookId);
+    userId = Number(userId);
+    const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
+    if (!book) return null;
+    if (book.uploader_id !== userId) return { error: 'forbidden' };
+
+    const patch = {};
+    const allowed = ['title', 'author', 'category', 'description'];
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        patch[key] = String(updates[key]).trim();
+      }
     }
-    return book ? book.downloads : 0;
+
+    if (Object.keys(patch).length > 0) {
+      await supabase.from('books').update(patch).eq('id', bookId);
+    }
+
+    // Update tags if provided
+    if (updates.tags && Array.isArray(updates.tags)) {
+      await supabase.from('tags').delete().eq('book_id', bookId);
+      const tagInserts = updates.tags.filter(t => t && t.trim()).map(t => ({ book_id: bookId, tag: t.trim() }));
+      if (tagInserts.length > 0) {
+        await supabase.from('tags').insert(tagInserts);
+      }
+    }
+
+    const updatedBook = { ...book, ...patch };
+    const [enriched] = await this._enrichBooks([updatedBook]);
+    return enriched;
   },
 
-  // Stats
-  getStats() {
-    return {
-      totalBooks: _db.books.length,
-      totalUsers: _db.users.length,
-      totalDownloads: _db.books.reduce((sum, b) => sum + (b.downloads || 0), 0),
-    };
+  async deleteBook(bookId, userId) {
+    bookId = Number(bookId);
+    userId = Number(userId);
+    const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
+    if (!book) return { error: 'not_found' };
+    if (book.uploader_id !== userId) return { error: 'forbidden' };
+
+    await supabase.from('books').delete().eq('id', bookId);
+    return { deleted: true, file_path: book.file_path };
   },
 
-  // Categories (static)
-  getCategories() {
+  // ===================== Stats =====================
+
+  async getStats() {
+    const { count: totalBooks } = await supabase.from('books').select('*', { count: 'exact', head: true });
+    const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    const { data: books } = await supabase.from('books').select('downloads');
+    const totalDownloads = (books || []).reduce((sum, b) => sum + (b.downloads || 0), 0);
+    return { totalBooks: totalBooks || 0, totalUsers: totalUsers || 0, totalDownloads };
+  },
+
+  async getCategories() {
     return ['Ficción', 'Ciencia', 'Historia', 'Educación', 'Tecnología', 'Arte', 'Filosofía'];
   },
 
-  // Most downloaded books
-  mostDownloaded(limit = 6) {
-    return [..._db.books]
-      .sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
-      .slice(0, limit)
-      .map(_enrichBook);
+  async mostDownloaded(limit = 6) {
+    const { data } = await supabase.from('books').select('*').order('downloads', { ascending: false }).limit(limit);
+    return this._enrichBooks(data || []);
   },
 
-  // Categories with counts
-  categoriesWithCounts() {
+  async categoriesWithCounts() {
+    const { data: books } = await supabase.from('books').select('category');
     const cats = {};
-    for (const book of _db.books) {
+    for (const book of (books || [])) {
       cats[book.category] = (cats[book.category] || 0) + 1;
     }
     const icons = {
@@ -224,197 +319,122 @@ const Store = {
     })).sort((a, b) => b.count - a.count);
   },
 
-  // Favorites
-  toggleFavorite(userId, bookId) {
+  async recentBooks(limit = 6) {
+    const { data } = await supabase.from('books').select('*').order('created_at', { ascending: false }).limit(limit);
+    return this._enrichBooks(data || []);
+  },
+
+  // ===================== Favorites =====================
+
+  async toggleFavorite(userId, bookId) {
     userId = Number(userId);
     bookId = Number(bookId);
-    const idx = _db.favorites.findIndex(f => f.user_id === userId && f.book_id === bookId);
-    if (idx >= 0) {
-      _db.favorites.splice(idx, 1);
-      _writeDB(_db);
+    const { data: existing } = await supabase
+      .from('favorites')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      await supabase.from('favorites').delete().eq('user_id', userId).eq('book_id', bookId);
       return false; // removed
     } else {
-      _db.favorites.push({ user_id: userId, book_id: bookId, created_at: new Date().toISOString() });
-      _writeDB(_db);
+      await supabase.from('favorites').insert({ user_id: userId, book_id: bookId, created_at: new Date().toISOString() });
       return true; // added
     }
   },
 
-  isFavorite(userId, bookId) {
-    return _db.favorites.some(f => f.user_id === Number(userId) && f.book_id === Number(bookId));
+  async isFavorite(userId, bookId) {
+    const { data } = await supabase
+      .from('favorites')
+      .select('*')
+      .eq('user_id', Number(userId))
+      .eq('book_id', Number(bookId))
+      .limit(1);
+    return data && data.length > 0;
   },
 
-  favoritesByUser(userId) {
-    const favIds = _db.favorites
-      .filter(f => f.user_id === Number(userId))
-      .map(f => f.book_id);
-    return favIds.map(id => _enrichBook(_db.books.find(b => b.id === id))).filter(Boolean);
+  async favoritesByUser(userId) {
+    const { data: favRows } = await supabase.from('favorites').select('book_id').eq('user_id', Number(userId));
+    if (!favRows || favRows.length === 0) return [];
+    const bookIds = favRows.map(f => f.book_id);
+    const { data: books } = await supabase.from('books').select('*').in('id', bookIds);
+    return this._enrichBooks(books || []);
   },
 
-  favoriteCount(bookId) {
-    return _db.favorites.filter(f => f.book_id === Number(bookId)).length;
+  async favoriteCount(bookId) {
+    const { count } = await supabase
+      .from('favorites')
+      .select('*', { count: 'exact', head: true })
+      .eq('book_id', Number(bookId));
+    return count || 0;
   },
 
-  // Reading history
-  addReadingHistory(userId, bookId) {
+  // ===================== Reading History =====================
+
+  async addReadingHistory(userId, bookId) {
     userId = Number(userId);
     bookId = Number(bookId);
-    // Remove existing entry for this user+book (move to front)
-    _db.reading_history = _db.reading_history.filter(
-      h => !(h.user_id === userId && h.book_id === bookId)
-    );
-    _db.reading_history.unshift({
-      user_id: userId,
-      book_id: bookId,
-      viewed_at: new Date().toISOString(),
-    });
+    // Upsert: delete existing and insert new
+    await supabase.from('reading_history').delete().eq('user_id', userId).eq('book_id', bookId);
+    await supabase.from('reading_history').insert({ user_id: userId, book_id: bookId, viewed_at: new Date().toISOString() });
     // Keep max 20 per user
-    const userHistory = _db.reading_history.filter(h => h.user_id === userId);
-    if (userHistory.length > 20) {
-      const toRemove = userHistory.slice(20);
-      for (const item of toRemove) {
-        const ri = _db.reading_history.indexOf(item);
-        if (ri >= 0) _db.reading_history.splice(ri, 1);
-      }
+    const { data: history } = await supabase
+      .from('reading_history')
+      .select('id')
+      .eq('user_id', userId)
+      .order('viewed_at', { ascending: false });
+    if (history && history.length > 20) {
+      const toRemove = history.slice(20).map(h => h.id);
+      await supabase.from('reading_history').delete().in('id', toRemove);
     }
-    _writeDB(_db);
   },
 
-  readingHistoryByUser(userId) {
-    return _db.reading_history
-      .filter(h => h.user_id === Number(userId))
-      .slice(0, 10)
-      .map(h => ({ ..._enrichBook(_db.books.find(b => b.id === h.book_id)), viewed_at: h.viewed_at }))
-      .filter(h => h.id);
+  async readingHistoryByUser(userId) {
+    const { data: historyRows } = await supabase
+      .from('reading_history')
+      .select('book_id, viewed_at')
+      .eq('user_id', Number(userId))
+      .order('viewed_at', { ascending: false })
+      .limit(10);
+    if (!historyRows || historyRows.length === 0) return [];
+    const results = [];
+    for (const h of historyRows) {
+      const book = await this.bookById(h.book_id);
+      if (book) results.push({ ...book, viewed_at: h.viewed_at });
+    }
+    return results;
   },
 
-  // Paginated books
-  searchBooksPaginated({ query = '', category = '', page = 1, perPage = 12 } = {}) {
-    let books = [..._db.books];
-    if (category) {
-      books = books.filter(b => b.category === category);
-    }
-    if (query.trim()) {
-      const q = query.toLowerCase().trim();
-      books = books.filter(b =>
-        b.title.toLowerCase().includes(q) ||
-        b.author.toLowerCase().includes(q) ||
-        _getTagsForBook(b.id).some(t => t.toLowerCase().includes(q))
-      );
-    }
-    books.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const total = books.length;
-    const totalPages = Math.ceil(total / perPage);
-    const offset = (page - 1) * perPage;
-    const paginated = books.slice(offset, offset + perPage).map(_enrichBook);
-    return { books: paginated, total, page, totalPages, perPage };
-  },
+  // ===================== Ratings =====================
 
-  // Recent books (last N)
-  recentBooks(limit = 6) {
-    return [..._db.books]
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, limit)
-      .map(_enrichBook);
-  },
-
-  // Delete book (owner only)
-  deleteBook(bookId, userId) {
-    bookId = Number(bookId);
-    userId = Number(userId);
-    const idx = _db.books.findIndex(b => b.id === bookId);
-    if (idx < 0) return { error: 'not_found' };
-    if (_db.books[idx].uploader_id !== userId) return { error: 'forbidden' };
-
-    const book = _db.books[idx];
-    _db.books.splice(idx, 1);
-
-    // Clean up related data
-    _db.tags = _db.tags.filter(t => t.book_id !== bookId);
-    _db.favorites = _db.favorites.filter(f => f.book_id !== bookId);
-    _db.reading_history = _db.reading_history.filter(h => h.book_id !== bookId);
-    _db.ratings = _db.ratings.filter(r => r.book_id !== bookId);
-    _db.comments = _db.comments.filter(c => c.book_id !== bookId);
-
-    _writeDB(_db);
-    return { deleted: true, file_path: book.file_path };
-  },
-
-  // Update book (owner only)
-  updateBook(bookId, userId, updates) {
-    bookId = Number(bookId);
-    userId = Number(userId);
-    const book = _db.books.find(b => b.id === bookId);
-    if (!book) return null;
-    if (book.uploader_id !== userId) return { error: 'forbidden' };
-
-    const allowed = ['title', 'author', 'category', 'description'];
-    for (const key of allowed) {
-      if (updates[key] !== undefined) {
-        book[key] = String(updates[key]).trim();
-      }
-    }
-
-    // Update tags if provided
-    if (updates.tags && Array.isArray(updates.tags)) {
-      _db.tags = _db.tags.filter(t => t.book_id !== bookId);
-      for (const tag of updates.tags) {
-        if (tag && tag.trim()) {
-          _db.tags.push({ book_id: bookId, tag: tag.trim() });
-        }
-      }
-    }
-
-    _writeDB(_db);
-    return _enrichBook(book);
-  },
-
-  // Update user profile
-  updateUser(userId, updates) {
-    userId = Number(userId);
-    const user = _db.users.find(u => u.id === userId);
-    if (!user) return null;
-
-    if (updates.name && updates.name.trim()) {
-      user.name = updates.name.trim();
-    }
-    if (updates.email && updates.email.trim()) {
-      // Check email uniqueness
-      const existing = _db.users.find(u => u.email === updates.email.trim().toLowerCase() && u.id !== userId);
-      if (existing) return { error: 'email_taken' };
-      user.email = updates.email.trim().toLowerCase();
-    }
-    if (updates.password) {
-      user.password = bcrypt.hashSync(updates.password, 10);
-    }
-
-    _writeDB(_db);
-    return { id: user.id, name: user.name, email: user.email, created_at: user.created_at };
-  },
-
-  // ---- Ratings ----
-  setRating(userId, bookId, score) {
+  async setRating(userId, bookId, score) {
     userId = Number(userId);
     bookId = Number(bookId);
     score = Math.max(1, Math.min(5, Math.round(Number(score))));
 
-    const existing = _db.ratings.find(r => r.user_id === userId && r.book_id === bookId);
-    if (existing) {
-      existing.score = score;
-      existing.created_at = new Date().toISOString();
+    const { data: existing } = await supabase
+      .from('ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      await supabase.from('ratings').update({ score, created_at: new Date().toISOString() }).eq('user_id', userId).eq('book_id', bookId);
     } else {
-      _db.ratings.push({ user_id: userId, book_id: bookId, score, created_at: new Date().toISOString() });
+      await supabase.from('ratings').insert({ user_id: userId, book_id: bookId, score, created_at: new Date().toISOString() });
     }
-    _writeDB(_db);
     return this.getRatingStats(bookId);
   },
 
-  getRatingStats(bookId) {
+  async getRatingStats(bookId) {
     bookId = Number(bookId);
-    const ratings = _db.ratings.filter(r => r.book_id === bookId);
-    if (ratings.length === 0) return { average: 0, count: 0, distribution: {1:0,2:0,3:0,4:0,5:0} };
+    const { data: ratings } = await supabase.from('ratings').select('score').eq('book_id', bookId);
+    if (!ratings || ratings.length === 0) return { average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
     const sum = ratings.reduce((s, r) => s + r.score, 0);
-    const distribution = {1:0,2:0,3:0,4:0,5:0};
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     for (const r of ratings) distribution[r.score]++;
     return {
       average: Math.round((sum / ratings.length) * 10) / 10,
@@ -423,188 +443,181 @@ const Store = {
     };
   },
 
-  getUserRating(userId, bookId) {
-    const r = _db.ratings.find(r => r.user_id === Number(userId) && r.book_id === Number(bookId));
-    return r ? r.score : 0;
+  async getUserRating(userId, bookId) {
+    const { data } = await supabase
+      .from('ratings')
+      .select('score')
+      .eq('user_id', Number(userId))
+      .eq('book_id', Number(bookId))
+      .limit(1)
+      .single();
+    return data ? data.score : 0;
   },
 
-  // ---- Comments ----
-  getComments(bookId, { page = 1, perPage = 20 } = {}) {
+  // ===================== Comments =====================
+
+  async getComments(bookId, { page = 1, perPage = 20 } = {}) {
     bookId = Number(bookId);
-    let comments = _db.comments
-      .filter(c => c.book_id === bookId)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const total = comments.length;
-    const totalPages = Math.ceil(total / perPage);
     const offset = (page - 1) * perPage;
-    comments = comments.slice(offset, offset + perPage);
+
+    const { data: comments, count: total } = await supabase
+      .from('comments')
+      .select('*', { count: 'exact' })
+      .eq('book_id', bookId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + perPage - 1);
 
     // Enrich with user names
-    const enriched = comments.map(c => {
-      const user = _db.users.find(u => u.id === c.user_id);
-      return { ...c, user_name: user ? user.name : 'Anónimo' };
-    });
+    const enriched = [];
+    for (const c of (comments || [])) {
+      let userName = 'Anónimo';
+      if (c.user_id) {
+        const { data: user } = await supabase.from('users').select('name').eq('id', c.user_id).single();
+        if (user) userName = user.name;
+      }
+      enriched.push({ ...c, user_name: userName });
+    }
 
-    return { comments: enriched, total, page, totalPages };
+    const totalPages = Math.ceil((total || 0) / perPage);
+    return { comments: enriched, total: total || 0, page, totalPages };
   },
 
-  addComment(userId, bookId, text) {
+  async addComment(userId, bookId, text) {
     userId = Number(userId);
     bookId = Number(bookId);
     if (!text || !text.trim()) return null;
 
-    const id = _nextId('comments');
-    const comment = {
-      id,
-      user_id: userId,
-      book_id: bookId,
-      text: text.trim(),
-      created_at: new Date().toISOString(),
-    };
-    _db.comments.push(comment);
-    _writeDB(_db);
+    const { data: comment, error } = await supabase
+      .from('comments')
+      .insert({ user_id: userId, book_id: bookId, text: text.trim(), created_at: new Date().toISOString() })
+      .select('*')
+      .single();
+    if (error) throw error;
 
-    const user = _db.users.find(u => u.id === userId);
-    return { ...comment, user_name: user ? user.name : 'Anónimo' };
+    let userName = 'Anónimo';
+    const { data: user } = await supabase.from('users').select('name').eq('id', userId).single();
+    if (user) userName = user.name;
+
+    return { ...comment, user_name: userName };
   },
 
-  deleteComment(commentId, userId) {
+  async deleteComment(commentId, userId) {
     commentId = Number(commentId);
     userId = Number(userId);
-    const idx = _db.comments.findIndex(c => c.id === commentId);
-    if (idx < 0) return { error: 'not_found' };
-    if (_db.comments[idx].user_id !== userId) return { error: 'forbidden' };
-    _db.comments.splice(idx, 1);
-    _writeDB(_db);
+    const { data: comment } = await supabase.from('comments').select('*').eq('id', commentId).single();
+    if (!comment) return { error: 'not_found' };
+    if (comment.user_id !== userId) return { error: 'forbidden' };
+    await supabase.from('comments').delete().eq('id', commentId);
     return { deleted: true };
   },
 
-  // ---- Views tracking ----
-  addView(userId, bookId) {
+  // ===================== Views =====================
+
+  async addView(userId, bookId) {
     bookId = Number(bookId);
-    const book = _db.books.find(b => b.id === bookId);
+    const { data: book } = await supabase.from('books').select('downloads').eq('id', bookId).single();
     if (!book) return null;
     if (userId) {
-      this.addReadingHistory(Number(userId), bookId);
+      await this.addReadingHistory(Number(userId), bookId);
     }
     return book.downloads || 0;
   },
 
-  // ---- Admin methods ----
-  isAdmin(userId) {
-    const user = _db.users.find(u => u.id === Number(userId));
-    return user && (user.role === 'admin');
+  // ===================== Admin =====================
+
+  async isAdmin(userId) {
+    const { data: user } = await supabase.from('users').select('role').eq('id', Number(userId)).single();
+    return user && user.role === 'admin';
   },
 
-  getAllUsers() {
-    return _db.users.map(u => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role || 'user',
-      created_at: u.created_at,
-      bookCount: _db.books.filter(b => b.uploader_id === u.id).length,
-      totalDownloads: _db.books.filter(b => b.uploader_id === u.id).reduce((s, b) => s + (b.downloads || 0), 0),
-      favoriteCount: _db.favorites.filter(f => f.user_id === u.id).length,
-      commentCount: _db.comments.filter(c => c.user_id === u.id).length,
-    }));
+  async getAllUsers() {
+    const { data: users } = await supabase.from('users').select('id, name, email, role, created_at');
+    const result = [];
+    for (const u of (users || [])) {
+      const { count: bookCount } = await supabase.from('books').select('*', { count: 'exact', head: true }).eq('uploader_id', u.id);
+      const { data: userBooks } = await supabase.from('books').select('downloads').eq('uploader_id', u.id);
+      const totalDownloads = (userBooks || []).reduce((s, b) => s + (b.downloads || 0), 0);
+      const { count: favoriteCount } = await supabase.from('favorites').select('*', { count: 'exact', head: true }).eq('user_id', u.id);
+      const { count: commentCount } = await supabase.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', u.id);
+      result.push({
+        ...u,
+        bookCount: bookCount || 0,
+        totalDownloads,
+        favoriteCount: favoriteCount || 0,
+        commentCount: commentCount || 0,
+      });
+    }
+    return result;
   },
 
-  adminDeleteBook(bookId) {
+  async adminDeleteBook(bookId) {
     bookId = Number(bookId);
-    const idx = _db.books.findIndex(b => b.id === bookId);
-    if (idx < 0) return { error: 'not_found' };
-
-    const book = _db.books[idx];
-    _db.books.splice(idx, 1);
-
-    // Clean up related data
-    _db.tags = _db.tags.filter(t => t.book_id !== bookId);
-    _db.favorites = _db.favorites.filter(f => f.book_id !== bookId);
-    _db.reading_history = _db.reading_history.filter(h => h.book_id !== bookId);
-    _db.ratings = _db.ratings.filter(r => r.book_id !== bookId);
-    _db.comments = _db.comments.filter(c => c.book_id !== bookId);
-
-    _writeDB(_db);
+    const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
+    if (!book) return { error: 'not_found' };
+    await supabase.from('books').delete().eq('id', bookId);
     return { deleted: true, file_path: book.file_path };
   },
 
-  adminDeleteUser(userId) {
+  async adminDeleteUser(userId) {
     userId = Number(userId);
-    const idx = _db.users.findIndex(u => u.id === userId);
-    if (idx < 0) return { error: 'not_found' };
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!user) return { error: 'not_found' };
 
     // Don't allow deleting the last admin
-    const user = _db.users[idx];
     if (user.role === 'admin') {
-      const adminCount = _db.users.filter(u => u.role === 'admin').length;
-      if (adminCount <= 1) return { error: 'last_admin' };
+      const { count: adminCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'admin');
+      if ((adminCount || 0) <= 1) return { error: 'last_admin' };
     }
 
-    _db.users.splice(idx, 1);
+    // Get books by this user for cleanup
+    const { data: userBooks } = await supabase.from('books').select('file_path').eq('uploader_id', userId);
+    const deletedFilePaths = (userBooks || []).map(b => b.file_path);
 
-    // Clean up user data
-    _db.favorites = _db.favorites.filter(f => f.user_id !== userId);
-    _db.reading_history = _db.reading_history.filter(h => h.user_id !== userId);
-    _db.ratings = _db.ratings.filter(r => r.user_id !== userId);
-    _db.comments = _db.comments.filter(c => c.user_id !== userId);
-
-    // Delete books uploaded by this user
-    const userBooks = _db.books.filter(b => b.uploader_id === userId);
-    const deletedFilePaths = [];
-    for (const book of userBooks) {
-      deletedFilePaths.push(book.file_path);
-    }
-    _db.books = _db.books.filter(b => b.uploader_id !== userId);
-
-    // Clean orphaned tags
-    const bookIds = new Set(_db.books.map(b => b.id));
-    _db.tags = _db.tags.filter(t => bookIds.has(t.book_id));
-
-    _writeDB(_db);
+    await supabase.from('users').delete().eq('id', userId);
     return { deleted: true, deletedFilePaths };
   },
 
-  adminSetUserRole(userId, role) {
+  async adminSetUserRole(userId, role) {
     userId = Number(userId);
     if (!['admin', 'user'].includes(role)) return { error: 'invalid_role' };
 
-    const user = _db.users.find(u => u.id === userId);
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
     if (!user) return { error: 'not_found' };
 
     // Don't allow removing last admin's role
     if (user.role === 'admin' && role !== 'admin') {
-      const adminCount = _db.users.filter(u => u.role === 'admin').length;
-      if (adminCount <= 1) return { error: 'last_admin' };
+      const { count: adminCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'admin');
+      if ((adminCount || 0) <= 1) return { error: 'last_admin' };
     }
 
-    user.role = role;
-    _writeDB(_db);
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    await supabase.from('users').update({ role }).eq('id', userId);
+    return { id: user.id, name: user.name, email: user.email, role };
   },
 
-  getAdminStats() {
-    const totalBooks = _db.books.length;
-    const totalUsers = _db.users.length;
-    const totalDownloads = _db.books.reduce((s, b) => s + (b.downloads || 0), 0);
-    const totalComments = _db.comments.length;
-    const totalRatings = _db.ratings.length;
-    const totalFavorites = _db.favorites.length;
-    const booksThisMonth = _db.books.filter(b => {
-      const d = new Date(b.created_at);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
-    const usersThisMonth = _db.users.filter(u => {
-      const d = new Date(u.created_at);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
+  async getAdminStats() {
+    const { count: totalBooks } = await supabase.from('books').select('*', { count: 'exact', head: true });
+    const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    const { data: books } = await supabase.from('books').select('downloads');
+    const totalDownloads = (books || []).reduce((s, b) => s + (b.downloads || 0), 0);
+    const { count: totalComments } = await supabase.from('comments').select('*', { count: 'exact', head: true });
+    const { count: totalRatings } = await supabase.from('ratings').select('*', { count: 'exact', head: true });
+    const { count: totalFavorites } = await supabase.from('favorites').select('*', { count: 'exact', head: true });
+
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const { data: recentBooks } = await supabase.from('books').select('created_at').gte('created_at', thisMonth);
+    const { data: recentUsers } = await supabase.from('users').select('created_at').gte('created_at', thisMonth);
 
     return {
-      totalBooks, totalUsers, totalDownloads,
-      totalComments, totalRatings, totalFavorites,
-      booksThisMonth, usersThisMonth,
+      totalBooks: totalBooks || 0,
+      totalUsers: totalUsers || 0,
+      totalDownloads,
+      totalComments: totalComments || 0,
+      totalRatings: totalRatings || 0,
+      totalFavorites: totalFavorites || 0,
+      booksThisMonth: (recentBooks || []).length,
+      usersThisMonth: (recentUsers || []).length,
     };
   },
 };

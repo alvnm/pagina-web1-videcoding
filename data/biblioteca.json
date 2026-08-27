@@ -1,5 +1,22 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": 1,
+      "name": "Test User",
+      "email": "test@test.com",
+      "password": "$2a$10$h2RDPwL55TGATS0vkjsyYeVzRCBPg0eCWrG.r67Gj2vkU4R7kuR3W",
+      "role": "user",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": 2,
+      "name": "Test User 2 Updated",
+      "email": "test2@test.com",
+      "password": "$2a$10$QDRwDLJ1lnZYHbOpbLv3auDx4fhBMPe1W2leOJKMIc8ZjLf04izOG",
+      "role": "user",
+      "created_at": "2026-08-27"
+    }
+  ],
   "books": [],
   "tags": [],
   "favorites": [],
