@@ -311,23 +311,33 @@ router.post('/:id/auto-cover', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para modificar este documento.' });
     }
 
-    let coverUrl;
+    let coverUrl = null;
     try {
       coverUrl = await coverService.autoGenerateCover(
         book.title, book.author, book.category, book.id
       );
     } catch (coverErr) {
       console.error('❌ coverService.autoGenerateCover threw:', coverErr.message);
-      // Fallback: generate placeholder directly
-      coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
     }
 
-    console.log('📎 Generated cover URL:', coverUrl);
-
+    // Fallback 1: try savePlaceholderCover directly
     if (!coverUrl) {
-      console.log('❌ No cover URL generated');
-      return res.status(404).json({ error: 'No se pudo generar una portada.' });
+      try {
+        coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
+      } catch (phErr) {
+        console.error('❌ savePlaceholderCover failed:', phErr.message);
+      }
     }
+
+    // Fallback 2: generate a data URI SVG (always works, no filesystem needed)
+    if (!coverUrl) {
+      const svg = coverService.generatePlaceholderSVG(book.title, book.author, book.category, book.id);
+      const encoded = Buffer.from(svg, 'utf8').toString('base64');
+      coverUrl = `data:image/svg+xml;base64,${encoded}`;
+      console.log('✅ Using inline data URI SVG as final fallback');
+    }
+
+    console.log('📎 Generated cover URL:', coverUrl ? coverUrl.substring(0, 80) + '...' : 'null');
 
     // Update book with new cover (using dedicated cover update method)
     const result = await Store.updateBookCover(book.id, coverUrl);

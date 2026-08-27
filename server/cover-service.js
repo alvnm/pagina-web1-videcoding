@@ -10,7 +10,11 @@ const path = require('path');
 const fs = require('fs');
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+} catch (e) {
+  console.error('⚠️ Could not create uploads dir:', e.message);
+}
 
 // ---- HTTP helpers ----
 
@@ -258,11 +262,26 @@ function _escapeXml(str) {
  */
 function savePlaceholderCover(title, author, category, bookId) {
   const svg = generatePlaceholderSVG(title, author, category, bookId);
-  const filename = `cover-placeholder-${bookId || Date.now()}-${Math.round(Math.random() * 1e4)}.svg`;
-  const filePath = path.join(UPLOAD_DIR, filename);
-  fs.writeFileSync(filePath, svg, 'utf8');
-  console.log('✅ Placeholder cover saved:', filename);
-  return `/uploads/${filename}`;
+
+  // Try to save to disk
+  try {
+    // Ensure upload dir exists
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+    const filename = `cover-placeholder-${bookId || Date.now()}-${Math.round(Math.random() * 1e4)}.svg`;
+    const filePath = path.join(UPLOAD_DIR, filename);
+    fs.writeFileSync(filePath, svg, 'utf8');
+    console.log('✅ Placeholder cover saved:', filename);
+    return `/uploads/${filename}`;
+  } catch (fileErr) {
+    console.error('⚠️ Could not save SVG to disk:', fileErr.message);
+    // Fallback: return a data URI so the browser can display it
+    const encoded = Buffer.from(svg, 'utf8').toString('base64');
+    const dataUri = `data:image/svg+xml;base64,${encoded}`;
+    console.log('✅ Using data URI fallback for placeholder');
+    return dataUri;
+  }
 }
 
 /**
