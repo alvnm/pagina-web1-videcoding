@@ -675,7 +675,7 @@ const Components = (() => {
     // Rating stars
     const rating = book.rating || { average: 0, count: 0, distribution: {} };
     const userRating = book.user_rating || 0;
-    const starsHtml = _renderStars(rating.average, book.id, userRating, !!session);
+    const starsHtml = _renderStars(rating.average, book.id, userRating, !!session, rating.count);
 
     // Owner actions
     let ownerActions = '';
@@ -768,7 +768,7 @@ const Components = (() => {
     `;
   }
 
-  function _renderStars(average, bookId, userRating, isLoggedIn) {
+  function _renderStars(average, bookId, userRating, isLoggedIn, ratingCount = 0) {
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       const filled = i <= Math.round(average);
@@ -791,7 +791,7 @@ const Components = (() => {
       <div class="detail-rating">
         <div class="rating-display">
           <div class="rating-stars">${stars.join('')}</div>
-          <span class="rating-text">${average ? average.toFixed(1) : '0.0'} de 5 · ${book.rating ? book.rating.count : 0} calificacion${book.rating && book.rating.count !== 1 ? 'es' : ''}</span>
+          <span class="rating-text">${average ? average.toFixed(1) : '0.0'} de 5 · ${ratingCount} calificacion${ratingCount !== 1 ? 'es' : ''}</span>
         </div>
         ${interactiveHtml}
       </div>
