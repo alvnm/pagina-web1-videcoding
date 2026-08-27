@@ -155,8 +155,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     // Clean up uploaded file if exists
-    if (result.file_path) {
-      const filePath = path.join(__dirname, '..', result.file_path);
+    if (result.file_url) {
+      const filePath = path.join(__dirname, '..', result.file_url);
       if (fs.existsSync(filePath)) {
         try { fs.unlinkSync(filePath); } catch { /* ignore */ }
       }
@@ -179,14 +179,10 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
     }
 
     const file = req.file;
-    let fileType = 'PDF';
-    let fileName = '';
-    let filePath = '';
+    let fileUrl = '';
 
     if (file) {
-      fileType = path.extname(file.originalname).replace('.', '').toUpperCase();
-      fileName = file.originalname;
-      filePath = '/uploads/' + file.filename;
+      fileUrl = '/uploads/' + file.filename;
     }
 
     // Parse tags
@@ -200,10 +196,8 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       author: author.trim(),
       category,
       description: description.trim(),
-      file_type: fileType,
-      file_name: fileName,
-      file_path: filePath,
-      uploader_id: req.session.user.id,
+      file_url: fileUrl,
+      user_id: req.session.user.id,
       tags: tagList,
     });
 
@@ -228,10 +222,10 @@ router.post('/:id/download', async (req, res) => {
     }
 
     // If the file exists on disk, serve it; otherwise just count the download
-    if (book.file_path) {
-      const filePath = path.join(__dirname, '..', book.file_path);
+    if (book.file_url) {
+      const filePath = path.join(__dirname, '..', book.file_url);
       if (fs.existsSync(filePath)) {
-        return res.download(filePath, book.file_name || path.basename(filePath));
+        return res.download(filePath, path.basename(book.file_url));
       }
     }
 

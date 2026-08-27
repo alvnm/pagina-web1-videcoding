@@ -114,15 +114,15 @@ const Store = {
     if (!books || books.length === 0) return [];
     const enriched = [];
     for (const book of books) {
-      // Get tags
-      const { data: tagRows } = await supabase.from('tags').select('tag').eq('book_id', book.id);
-      // Get uploader name
+      // Tags are stored as ARRAY in the books table
+      const tags = Array.isArray(book.tags) ? book.tags : [];
+      // Get uploader name from user_id
       let uploaderName = 'Desconocido';
-      if (book.uploader_id) {
-        const { data: uploader } = await supabase.from('users').select('name').eq('id', book.uploader_id).single();
+      if (book.user_id) {
+        const { data: uploader } = await supabase.from('users').select('name').eq('id', book.user_id).single();
         if (uploader) uploaderName = uploader.name;
       }
-      enriched.push({ ...book, tags: (tagRows || []).map(t => t.tag), uploader_name: uploaderName });
+      enriched.push({ ...book, tags, uploader_name: uploaderName });
     }
     return enriched;
   },
@@ -143,7 +143,7 @@ const Store = {
     const { data } = await supabase
       .from('books')
       .select('*')
-      .eq('uploader_id', userId)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     return this._enrichBooks(data || []);
   },
@@ -209,7 +209,7 @@ const Store = {
     return { books, total, page, totalPages, perPage };
   },
 
-  async createBook({ title, author, category, description, file_type, file_name, file_path, uploader_id, tags }) {
+  async createBook({ title, author, category, description, file_url, user_id, tags }) {
     const { data: book, error } = await supabase
       .from('books')
       .insert({
@@ -217,24 +217,15 @@ const Store = {
         author,
         category,
         description: description || '',
-        file_type: file_type || 'PDF',
-        file_name: file_name || '',
-        file_path: file_path || '',
-        uploader_id: uploader_id,
-        created_at: new Date().toISOString().slice(0, 10),
+        file_url: file_url || '',
+        user_id: user_id,
+        tags: tags || [],
+        created_at: new Date().toISOString(),
         downloads: 0,
       })
       .select('*')
       .single();
     if (error) throw error;
-
-    // Insert tags
-    if (tags && tags.length) {
-      const tagInserts = tags.filter(t => t && t.trim()).map(t => ({ book_id: book.id, tag: t.trim() }));
-      if (tagInserts.length > 0) {
-        await supabase.from('tags').insert(tagInserts);
-      }
-    }
 
     const [enriched] = await this._enrichBooks([book]);
     return enriched;
@@ -252,7 +243,7 @@ const Store = {
   async updateBook(bookId, userId, updates) {
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return null;
-    if (book.uploader_id !== userId) return { error: 'forbidden' };
+    if (book.user_id !== userId) return { error: 'forbidden' };
 
     const patch = {};
     const allowed = ['title', 'author', 'category', 'description'];
@@ -262,17 +253,13 @@ const Store = {
       }
     }
 
-    if (Object.keys(patch).length > 0) {
-      await supabase.from('books').update(patch).eq('id', bookId);
+    // Update tags if provided (stored as ARRAY)
+    if (updates.tags && Array.isArray(updates.tags)) {
+      patch.tags = updates.tags;
     }
 
-    // Update tags if provided
-    if (updates.tags && Array.isArray(updates.tags)) {
-      await supabase.from('tags').delete().eq('book_id', bookId);
-      const tagInserts = updates.tags.filter(t => t && t.trim()).map(t => ({ book_id: bookId, tag: t.trim() }));
-      if (tagInserts.length > 0) {
-        await supabase.from('tags').insert(tagInserts);
-      }
+    if (Object.keys(patch).length > 0) {
+      await supabase.from('books').update(patch).eq('id', bookId);
     }
 
     const updatedBook = { ...book, ...patch };
@@ -283,10 +270,10 @@ const Store = {
   async deleteBook(bookId, userId) {
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return { error: 'not_found' };
-    if (book.uploader_id !== userId) return { error: 'forbidden' };
+    if (book.user_id !== userId) return { error: 'forbidden' };
 
     await supabase.from('books').delete().eq('id', bookId);
-    return { deleted: true, file_path: book.file_path };
+    return { deleted: true, file_url: book.file_url };
   },
 
   // ===================== Stats =====================
@@ -527,8 +514,8 @@ const Store = {
     const { data: users } = await supabase.from('users').select('id, name, email, role, created_at');
     const result = [];
     for (const u of (users || [])) {
-      const { count: bookCount } = await supabase.from('books').select('*', { count: 'exact', head: true }).eq('uploader_id', u.id);
-      const { data: userBooks } = await supabase.from('books').select('downloads').eq('uploader_id', u.id);
+      const { count: bookCount } = await supabase.from('books').select('*', { count: 'exact', head: true }).eq('user_id', u.id);
+      const { data: userBooks } = await supabase.from('books').select('downloads').eq('user_id', u.id);
       const totalDownloads = (userBooks || []).reduce((s, b) => s + (b.downloads || 0), 0);
       const { count: favoriteCount } = await supabase.from('favorites').select('*', { count: 'exact', head: true }).eq('user_id', u.id);
       const { count: commentCount } = await supabase.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', u.id);
@@ -547,7 +534,7 @@ const Store = {
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return { error: 'not_found' };
     await supabase.from('books').delete().eq('id', bookId);
-    return { deleted: true, file_path: book.file_path };
+    return { deleted: true, file_url: book.file_url };
   },
 
   async adminDeleteUser(userId) {
@@ -561,11 +548,11 @@ const Store = {
     }
 
     // Get books by this user for cleanup
-    const { data: userBooks } = await supabase.from('books').select('file_path').eq('uploader_id', userId);
-    const deletedFilePaths = (userBooks || []).map(b => b.file_path);
+    const { data: userBooks } = await supabase.from('books').select('file_url').eq('user_id', userId);
+    const deletedFileUrls = (userBooks || []).map(b => b.file_url);
 
     await supabase.from('users').delete().eq('id', userId);
-    return { deleted: true, deletedFilePaths };
+    return { deleted: true, deletedFileUrls };
   },
 
   async adminSetUserRole(userId, role) {
