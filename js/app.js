@@ -542,20 +542,27 @@ const App = (() => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('author', author);
-    formData.append('category', category);
-    formData.append('description', description);
-    formData.append('tags', JSON.stringify(_currentTags));
-
+    // Step 1: Upload file to Supabase Storage (if file selected)
+    let fileUrl = '';
     const fileInput = document.getElementById('file-input');
     if (fileInput.files.length > 0) {
-      formData.append('file', fileInput.files[0]);
+      try {
+        Components.showToast('📤 Subiendo archivo...', 'info');
+        fileUrl = await Store.uploadBookFile(fileInput.files[0]);
+      } catch (uploadErr) {
+        console.error('File upload error:', uploadErr);
+        Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');
+        return;
+      }
     }
 
+    // Step 2: Create book record with file URL
     try {
-      const { book } = await Store.addBook(formData);
+      const { book } = await Store.addBookJSON({
+        title, author, category, description,
+        tags: _currentTags,
+        file_url: fileUrl,
+      });
       Components.showToast('¡Documento subido exitosamente! 🎉', 'success');
       Router.navigate('/book/' + book.id);
     } catch (err) {

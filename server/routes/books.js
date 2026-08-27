@@ -155,8 +155,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     // Clean up uploaded file if exists
-    if (result.file_path) {
-      const filePath = path.join(__dirname, '..', result.file_path);
+    if (result.file_url) {
+      const filePath = path.join(__dirname, '..', result.file_url);
       if (fs.existsSync(filePath)) {
         try { fs.unlinkSync(filePath); } catch { /* ignore */ }
       }
@@ -170,19 +170,29 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/books
-router.post('/', requireAuth, upload.single('file'), async (req, res) => {
+router.post('/', requireAuth, (req, res, next) => {
+  // Try multer for multipart (local dev), skip for JSON (Vercel)
+  if (req.is('multipart/form-data')) {
+    upload.single('file')(req, res, (err) => {
+      if (err) return next(err);
+      next();
+    });
+  } else {
+    next();
+  }
+}, async (req, res) => {
   try {
-    const { title, author, category, description, tags } = req.body;
+    const { title, author, category, description, tags, file_url } = req.body;
 
     if (!title || !author || !category || !description) {
       return res.status(400).json({ error: 'Título, autor, categoría y descripción son obligatorios.' });
     }
 
+    // Support both multer file upload and JSON file_url (for Vercel/Supabase Storage)
     const file = req.file;
-    let fileUrl = '';
-
+    let bookFileUrl = file_url || '';
     if (file) {
-      fileUrl = '/uploads/' + file.filename;
+      bookFileUrl = '/uploads/' + file.filename;
     }
 
     // Parse tags
@@ -191,14 +201,12 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       try { tagList = JSON.parse(tags); } catch { tagList = String(tags).split(',').map(t => t.trim()).filter(Boolean); }
     }
 
-    console.log('📤 Creating book. User ID:', req.session.user.id, 'Type:', typeof req.session.user.id);
-    console.log('📤 Session user:', JSON.stringify(req.session.user));
     const book = await Store.createBook({
       title: title.trim(),
       author: author.trim(),
       category,
       description: description.trim(),
-      file_url: fileUrl,
+      file_url: bookFileUrl,
       user_id: req.session.user.id,
       tags: tagList,
     });

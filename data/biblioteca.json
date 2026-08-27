@@ -35,6 +35,19 @@
       "uploader_id": 1,
       "created_at": "2026-08-27",
       "downloads": 0
+    },
+    {
+      "id": 3,
+      "title": "Libro de Prueba 2",
+      "author": "Autor Test",
+      "category": "Ficci�n",
+      "description": "Un libro de prueba",
+      "file_type": "PDF",
+      "file_name": "test-upload.pdf",
+      "file_path": "/uploads/1787817980822-653757.pdf",
+      "uploader_id": 1,
+      "created_at": "2026-08-27",
+      "downloads": 0
     }
   ],
   "tags": [],

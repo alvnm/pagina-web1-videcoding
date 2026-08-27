@@ -58,6 +58,8 @@ app.get('*', (req, res) => {
 // ---- Error handler ----
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err.message || err);
+  console.error('❌ Full stack:', err.stack || 'no stack');
+  console.error('❌ Error code:', err.code || 'no code');
 
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
@@ -73,7 +75,7 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: err.message });
   }
 
-  res.status(500).json({ error: 'Error interno del servidor.' });
+  res.status(500).json({ error: 'Error interno del servidor: ' + (err.message || 'unknown') });
 });
 
 module.exports = app;

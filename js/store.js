@@ -98,6 +98,18 @@ const Store = (() => {
     return data;
   }
 
+  async function addBookJSON(bookData) {
+    const res = await fetch(API + '/books', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookData),
+    });
+    const data = await _parseResponse(res);
+    if (!res.ok) throw new Error(data.error || 'Error al subir');
+    return data;
+  }
+
   async function incrementDownload(bookId) {
     return _post('/books/' + bookId + '/download');
   }
@@ -333,6 +345,7 @@ const Store = (() => {
     searchBooksPaginated,
     getBookById,
     addBook,
+    addBookJSON,
     deleteBook,
     updateBook,
     incrementDownload,
