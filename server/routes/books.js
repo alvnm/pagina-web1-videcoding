@@ -171,14 +171,12 @@ router.post('/auto-cover', requireAuth, async (req, res) => {
 
     for (const book of booksToProcess) {
       try {
+        // Use extractCoverFromBook: PDF first page → Open Library → Placeholder
         let coverUrl;
         try {
-          coverUrl = await coverService.autoGenerateCover(
-            book.title, book.author, book.category, book.id
-          );
+          coverUrl = await coverService.extractCoverFromBook(book);
         } catch (coverErr) {
-          // Fallback to placeholder
-          coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
+          console.error('❌ extractCoverFromBook error for', book.title, ':', coverErr.message);
         }
         if (coverUrl) {
           await Store.updateBookCover(book.id, coverUrl);
@@ -311,25 +309,15 @@ router.post('/:id/auto-cover', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para modificar este documento.' });
     }
 
+    // Use extractCoverFromBook: PDF first page → Open Library → Placeholder
     let coverUrl = null;
     try {
-      coverUrl = await coverService.autoGenerateCover(
-        book.title, book.author, book.category, book.id
-      );
+      coverUrl = await coverService.extractCoverFromBook(book);
     } catch (coverErr) {
-      console.error('❌ coverService.autoGenerateCover threw:', coverErr.message);
+      console.error('❌ coverService.extractCoverFromBook threw:', coverErr.message);
     }
 
-    // Fallback 1: try savePlaceholderCover directly
-    if (!coverUrl) {
-      try {
-        coverUrl = coverService.savePlaceholderCover(book.title, book.author, book.category, book.id);
-      } catch (phErr) {
-        console.error('❌ savePlaceholderCover failed:', phErr.message);
-      }
-    }
-
-    // Fallback 2: generate a data URI SVG (always works, no filesystem needed)
+    // Ultimate fallback: data URI SVG (always works)
     if (!coverUrl) {
       const svg = coverService.generatePlaceholderSVG(book.title, book.author, book.category, book.id);
       const encoded = Buffer.from(svg, 'utf8').toString('base64');
@@ -486,35 +474,39 @@ router.post('/', requireAuth, (req, res, next) => {
       bookCoverUrl = '/uploads/' + coverFile.filename;
     }
 
-    // If no cover provided, try auto-generation (Open Library → PDF → Placeholder)
+    // If no cover provided, try auto-generation
+    // Priority: PDF first page → Open Library → Placeholder
     if (!bookCoverUrl) {
-      // 1. Try Open Library API first (fast, no system deps)
-      try {
-        const olCover = await coverService.searchOpenLibraryCover(title, author);
-        if (olCover) {
-          bookCoverUrl = olCover;
-          console.log('📚 Auto-fetched cover from Open Library for:', title);
-        }
-      } catch (olErr) {
-        console.error('⚠️ Open Library cover search failed:', olErr.message);
-      }
-
-      // 2. If still no cover and file is local PDF, try PDF extraction
-      if (!bookCoverUrl && bookFileUrl && !bookFileUrl.startsWith('http')) {
+      // 1. Extract first page from local PDF (best quality, actual document cover)
+      if (bookFileUrl && !bookFileUrl.startsWith('http')) {
         try {
           const filePath = path.join(__dirname, '..', bookFileUrl);
           if (fs.existsSync(filePath)) {
             const ext = path.extname(filePath).toLowerCase();
             if (ext === '.pdf') {
+              console.log('📄 Extracting cover from PDF first page for:', title);
               const coverPath = await generateCoverFromPDF(filePath);
               if (coverPath) {
                 bookCoverUrl = coverPath;
-                console.log('🖼️ Generated cover from PDF for:', title);
+                console.log('🖼️ Cover extracted from PDF first page for:', title);
               }
             }
           }
         } catch (coverErr) {
-          console.error('⚠️ Could not generate cover from PDF:', coverErr.message);
+          console.error('⚠️ Could not extract cover from PDF:', coverErr.message);
+        }
+      }
+
+      // 2. Try Open Library API (fast, no system deps)
+      if (!bookCoverUrl) {
+        try {
+          const olCover = await coverService.searchOpenLibraryCover(title, author);
+          if (olCover) {
+            bookCoverUrl = olCover;
+            console.log('📚 Cover from Open Library for:', title);
+          }
+        } catch (olErr) {
+          console.error('⚠️ Open Library cover search failed:', olErr.message);
         }
       }
 
@@ -522,7 +514,7 @@ router.post('/', requireAuth, (req, res, next) => {
       if (!bookCoverUrl) {
         const placeholder = coverService.savePlaceholderCover(title, author, category, 'pending');
         bookCoverUrl = placeholder;
-        console.log('🎨 Generated placeholder cover for:', title);
+        console.log('🎨 Placeholder cover for:', title);
       }
     }
 

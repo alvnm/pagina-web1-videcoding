@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="560" viewBox="0 0 400 560">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e65100"/>
+      <stop offset="100%" style="stop-color:#ffb74d"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="400" height="560" rx="16" fill="url(#bg)"/>
+  <!-- Decorative top pattern -->
+  <rect x="0" y="0" width="400" height="8" fill="rgba(255,255,255,0.1)"/>
+  <rect x="20" y="30" width="360" height="1" fill="rgba(255,255,255,0.15)"/>
+  <!-- Category icon -->
+  <text x="200" y="120" text-anchor="middle" font-size="64" opacity="0.9">📚</text>
+  <!-- Title -->
+  <g filter="url(#shadow)">
+    <text x="200" y="182" text-anchor="middle" fill="white" font-family="'Playfair Display', Georgia, serif" font-size="26" font-weight="600">Mi Libro de Prueba</text>
+  </g>
+  <!-- Author -->
+  <text x="200" y="248" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="'Inter', sans-serif" font-size="16" font-weight="400">Autor Test</text>
+  <!-- Bottom decorative line -->
+  <rect x="120" y="480" width="160" height="2" rx="1" fill="rgba(255,255,255,0.3)"/>
+  <!-- Library name -->
+  <text x="200" y="520" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="'Inter', sans-serif" font-size="11" font-weight="500" letter-spacing="2">BIBLIOTECA COMUNITARIA</text>
+</svg>
