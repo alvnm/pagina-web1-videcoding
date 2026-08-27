@@ -29,7 +29,11 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, ALLOWED_EXTS.includes(ext));
+    if (ALLOWED_EXTS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Formato no soportado. Formatos válidos: ' + ALLOWED_EXTS.join(', ')));
+    }
   },
 });
 

@@ -10,7 +10,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'biblioteca.json');
 
 // ---- Helpers ----
-let _canWrite = true;
+let _writeAttempts = 0;
 
 function _readDB() {
   try {
@@ -21,13 +21,16 @@ function _readDB() {
 }
 
 function _writeDB(data) {
-  if (!_canWrite) return; // Silently skip on read-only filesystem (e.g. Vercel)
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    _writeAttempts = 0; // Reset on success
   } catch (err) {
-    console.warn('⚠️  No se pudo escribir la base de datos:', err.message);
-    _canWrite = false;
+    _writeAttempts++;
+    if (_writeAttempts <= 5) {
+      console.warn('⚠️  No se pudo escribir la base de datos:', err.message);
+    }
+    // Don't permanently disable — retry next time
   }
 }
 

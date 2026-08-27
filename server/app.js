@@ -57,13 +57,22 @@ app.get('*', (req, res) => {
 
 // ---- Error handler ----
 app.use((err, req, res, next) => {
-  console.error('❌ Server error:', err.message);
+  console.error('❌ Server error:', err.message || err);
+
+  // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'El archivo excede el límite de 50 MB.' });
+  }
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({ error: 'Campo de archivo inesperado.' });
+  }
+  if (err.code && err.code.startsWith('LIMIT_')) {
+    return res.status(400).json({ error: 'Error en la subida del archivo: ' + err.code });
   }
   if (err.message && err.message.includes('Formato')) {
     return res.status(400).json({ error: err.message });
   }
+
   res.status(500).json({ error: 'Error interno del servidor.' });
 });
 
