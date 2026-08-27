@@ -46,12 +46,15 @@ app.use('/api/books',  require('./routes/books'));
 app.use('/api/users',  require('./routes/users'));
 app.use('/api/admin',  require('./routes/admin'));
 
+// ---- API catch-all (all methods) ----
+// Return JSON 404 for any unmatched /api/* route
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint no encontrado.' });
+});
+
 // ---- SPA fallback ----
 // Any non-API route serves index.html for client-side routing
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'Endpoint no encontrado.' });
-  }
   res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 

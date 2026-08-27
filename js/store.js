@@ -12,9 +12,18 @@ const Store = (() => {
   const supabase = supabaseClient; // acceso interno al cliente Supabase
 
   // ---- Generic fetch helper ----
+  async function _parseResponse(res) {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('Error del servidor: respuesta no válida.');
+    }
+  }
+
   async function _get(url) {
     const res = await fetch(API + url, { credentials: 'include' });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error del servidor');
     return data;
   }
@@ -26,7 +35,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error del servidor');
     return data;
   }
@@ -84,7 +93,7 @@ const Store = (() => {
       credentials: 'include',
       body: formData, // FormData — browser sets Content-Type with boundary
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al subir');
     return data;
   }
@@ -134,7 +143,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al actualizar perfil');
     return data;
   }
@@ -149,7 +158,7 @@ const Store = (() => {
       method: 'DELETE',
       credentials: 'include',
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al eliminar');
     return data;
   }
@@ -161,7 +170,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al actualizar');
     return data;
   }
@@ -174,7 +183,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ score }),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al calificar');
     return data;
   }
@@ -197,7 +206,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al comentar');
     return data;
   }
@@ -207,7 +216,7 @@ const Store = (() => {
       method: 'DELETE',
       credentials: 'include',
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al eliminar comentario');
     return data;
   }
@@ -239,7 +248,7 @@ const Store = (() => {
       method: 'DELETE',
       credentials: 'include',
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al eliminar usuario');
     return data;
   }
@@ -249,7 +258,7 @@ const Store = (() => {
       method: 'DELETE',
       credentials: 'include',
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al eliminar libro');
     return data;
   }
@@ -261,7 +270,7 @@ const Store = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
     });
-    const data = await res.json();
+    const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al cambiar rol');
     return data;
   }
