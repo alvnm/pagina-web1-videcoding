@@ -699,9 +699,8 @@ const Components = (() => {
     `;
 
     // Share URL
-    const shareUrl = window.location.origin + '/#/book/' + book.id;
     const shareBtn = `
-      <button class="btn btn-secondary btn-lg" onclick="App.shareBook(${book.id}, '${escapeHtml(book.title).replace(/'/g, "\\'")}')">
+      <button class="btn btn-secondary btn-lg" onclick="App.shareBook(${book.id})">
         🔗 Compartir
       </button>
     `;
@@ -834,7 +833,7 @@ const Components = (() => {
       return `<div class="empty-state" style="padding:2rem 0;"><p class="empty-state-text">Aún no hay comentarios. ¡Sé el primero en comentar!</p></div>`;
     }
     return comments.map(c => {
-      const isAuthor = session && session.id === c.user_id;
+      const isAuthor = session && String(session.id) === String(c.user_id);
       return `
         <div class="comment-item" id="comment-${c.id}">
           <div class="comment-header">

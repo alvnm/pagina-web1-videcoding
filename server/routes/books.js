@@ -98,9 +98,10 @@ router.get('/:id', async (req, res) => {
     const book = await Store.bookById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
 
-    // Enrich with rating stats
+    // Enrich with rating stats, comment count, and favorite count
     const ratingStats = await Store.getRatingStats(req.params.id);
     const commentData = await Store.getComments(req.params.id);
+    const favCount = await Store.favoriteCount(req.params.id);
     let userRating = 0;
     if (req.session && req.session.user) {
       userRating = await Store.getUserRating(req.session.user.id, req.params.id);
@@ -111,6 +112,7 @@ router.get('/:id', async (req, res) => {
         ...book,
         rating: ratingStats,
         comment_count: commentData.total,
+        favorite_count: favCount || 0,
         user_rating: userRating,
       }
     });

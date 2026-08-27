@@ -68,13 +68,13 @@ const App = (() => {
 
       // Check favorite status
       let isFavorite = false;
-      let favCount = 0;
-      if (_session) {
-        try {
+      const favCount = book.favorite_count || 0;
+      try {
+        if (_session) {
           const favs = await Store.getUserFavorites(_session.id);
-          isFavorite = favs.some(f => f.id === book.id);
-        } catch { /* ignore */ }
-      }
+          isFavorite = favs.some(f => String(f.id) === String(book.id));
+        }
+      } catch { /* ignore */ }
 
       _renderPage(Components.renderDetailPage(book, isFavorite, favCount, _session));
 
@@ -190,8 +190,13 @@ const App = (() => {
     window.open(fileUrl, '_blank');
   }
 
-  function shareBook(bookId, title) {
+  async function shareBook(bookId) {
     const url = window.location.origin + '/#/book/' + bookId;
+    let title = 'Documento';
+    try {
+      const book = await Store.getBookById(bookId);
+      if (book) title = book.title;
+    } catch { /* use default */ }
     const text = `📖 ${title} — Biblioteca Comunitaria Virtual`;
     if (navigator.share) {
       navigator.share({ title: text, url }).catch(() => {});
@@ -1029,7 +1034,7 @@ const App = (() => {
 
         gridEl.innerHTML = result.books.length > 0
           ? result.books.map(b =>
-              Components.renderBookCard(b, !!_session, favIds.includes(b.id))
+              Components.renderBookCard(b, !!_session, favIds.some(f => String(f) === String(b.id)))
             ).join('')
           : `<div class="empty-state"><div class="empty-state-icon">📚</div>
               <p class="empty-state-text">No se encontraron documentos.</p>
