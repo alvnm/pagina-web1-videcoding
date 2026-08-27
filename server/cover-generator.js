@@ -1,19 +1,13 @@
 /* ============================================
    Cover Generator — Extract first page from PDF as cover image
-   Uses pdf2pic (requires GraphicsMagick or ImageMagick installed)
+   Uses pdfjs-dist + @napi-rs/canvas (pure JS, no Ghostscript needed)
    Falls back gracefully if dependencies are not available
    ============================================ */
 
 const path = require('path');
 const fs = require('fs');
 
-let pdf2pic = null;
-try {
-  pdf2pic = require('pdf2pic');
-} catch (e) {
-  console.log('⚠️ pdf2pic not installed. Auto-cover generation from PDF will be disabled.');
-  console.log('   To enable: npm install pdf2pic && install GraphicsMagick or ImageMagick');
-}
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 /**
  * Generate a cover image from the first page of a PDF file
@@ -21,11 +15,6 @@ try {
  * @returns {string|null} - Relative path to the generated cover image, or null if failed
  */
 async function generateCoverFromPDF(pdfPath) {
-  // If pdf2pic is not available, return null
-  if (!pdf2pic) {
-    return null;
-  }
-
   // Check if PDF file exists
   if (!fs.existsSync(pdfPath)) {
     console.error('❌ PDF file not found:', pdfPath);
@@ -33,29 +22,58 @@ async function generateCoverFromPDF(pdfPath) {
   }
 
   try {
-    // Configure pdf2pic
-    const options = {
-      density: 150,           // DPI for the output image
-      saveFilename: 'cover',  // Base filename
-      savePath: path.dirname(pdfPath), // Save in same directory as PDF
-      format: 'png',          // Output format
-      width: 400,             // Max width
-      height: 600,            // Max height
-    };
+    // Dynamic import for ESM modules (pdfjs-dist and @napi-rs/canvas)
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const { createCanvas } = await import('@napi-rs/canvas');
 
-    const convert = pdf2pic.fromPath(pdfPath, options);
+    // Read PDF file
+    const data = new Uint8Array(fs.readFileSync(pdfPath));
+    const doc = await pdfjsLib.getDocument({ data }).promise;
 
-    // Convert first page (page 1)
-    const result = await convert(1, { responseType: 'image' });
-
-    if (result && result.path) {
-      // Return the relative path from the project root
-      const relativePath = path.relative(path.join(__dirname, '..'), result.path);
-      console.log('✅ Cover generated from PDF:', relativePath);
-      return relativePath;
+    if (!doc || doc.numPages === 0) {
+      console.error('❌ PDF has no pages');
+      return null;
     }
 
-    return null;
+    // Get first page
+    const page = await doc.getPage(1);
+
+    // Scale to reasonable cover size (max 800px wide)
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    const maxWidth = 800;
+    const scale = Math.min(maxWidth / unscaledViewport.width, 2.0);
+    const viewport = page.getViewport({ scale });
+
+    // Create canvas and render
+    const canvas = createCanvas(viewport.width, viewport.height);
+    const ctx = canvas.getContext('2d');
+
+    await page.render({
+      canvasContext: ctx,
+      viewport,
+    }).promise;
+
+    // Convert to PNG buffer
+    const pngBuffer = canvas.toBuffer('image/png');
+
+    if (!pngBuffer || pngBuffer.length < 100) {
+      console.error('❌ Generated image is too small or empty');
+      return null;
+    }
+
+    // Save to uploads directory
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+
+    const filename = `cover-pdf-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
+    const filePath = path.join(UPLOAD_DIR, filename);
+    fs.writeFileSync(filePath, pngBuffer);
+
+    const relativePath = `/uploads/${filename}`;
+    console.log(`✅ Cover extracted from PDF: ${relativePath} (${(pngBuffer.length / 1024).toFixed(1)} KB, ${viewport.width}x${viewport.height})`);
+
+    return relativePath;
   } catch (err) {
     console.error('⚠️ Error generating cover from PDF:', err.message);
     return null;

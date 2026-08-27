@@ -480,7 +480,8 @@ router.post('/', requireAuth, (req, res, next) => {
       // 1. Extract first page from local PDF (best quality, actual document cover)
       if (bookFileUrl && !bookFileUrl.startsWith('http')) {
         try {
-          const filePath = path.join(__dirname, '..', bookFileUrl);
+          // file_url is like '/uploads/file.pdf' — file is in server/uploads/
+          const filePath = path.join(__dirname, '..', bookFileUrl.replace(/^\/+/, ''));
           if (fs.existsSync(filePath)) {
             const ext = path.extname(filePath).toLowerCase();
             if (ext === '.pdf') {

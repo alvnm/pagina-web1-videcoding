@@ -330,7 +330,9 @@ async function autoGenerateCover(title, author, category, bookId, bookFileUrl) {
     try {
       const ext = path.extname(bookFileUrl.split('?')[0]).toLowerCase();
       if (ext === '.pdf') {
-        const absPath = path.join(__dirname, '..', bookFileUrl);
+        // file_url is like '/uploads/file.pdf' — file is in server/uploads/
+        const absPath = path.join(__dirname, bookFileUrl.replace(/^\/+/, ''));
+        console.log('📄 PDF path:', absPath, 'exists:', fs.existsSync(absPath));
         if (fs.existsSync(absPath)) {
           console.log('📄 Attempting PDF first page extraction:', absPath);
           const coverPath = await generateCoverFromPDF(absPath);
@@ -384,7 +386,8 @@ async function extractCoverFromBook(book) {
     try {
       const ext = path.extname(file_url.split('?')[0]).toLowerCase();
       if (ext === '.pdf') {
-        const absPath = path.join(__dirname, '..', file_url);
+        // file_url is like '/uploads/file.pdf' — file is in server/uploads/
+        const absPath = path.join(__dirname, file_url.replace(/^\/+/, ''));
         if (fs.existsSync(absPath)) {
           console.log('📄 Extracting first page from PDF:', absPath);
           const coverPath = await generateCoverFromPDF(absPath);
