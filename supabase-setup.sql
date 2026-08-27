@@ -18,6 +18,7 @@ ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "documentos_select_publico"
 ON storage.objects
 FOR SELECT
+TO public
 USING (bucket_id = 'documentos');
 
 -- 3. Política: usuarios autenticados pueden SUBIR
@@ -32,11 +33,11 @@ CREATE POLICY "documentos_delete_propio"
 ON storage.objects
 FOR DELETE
 TO authenticated
-USING (bucket_id = 'documentos' AND owner_id = (SELECT auth.uid()));
+USING (bucket_id = 'documentos' AND owner = auth.uid());
 
 -- 5. Política: usuarios autenticados pueden ACTUALIZAR sus propios archivos
 CREATE POLICY "documentos_update_propio"
 ON storage.objects
 FOR UPDATE
 TO authenticated
-USING (bucket_id = 'documentos' AND owner_id = (SELECT auth.uid()));
+USING (bucket_id = 'documentos' AND owner = auth.uid());
