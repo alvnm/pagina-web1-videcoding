@@ -126,8 +126,8 @@ router.delete('/books/:id', async (req, res) => {
     }
 
     // Clean up uploaded file
-    if (result.file_url) {
-      const filePath = path.join(__dirname, '..', result.file_url);
+    if (result.file_path) {
+      const filePath = path.join(__dirname, '..', result.file_path);
       if (fs.existsSync(filePath)) {
         try { fs.unlinkSync(filePath); } catch { /* ignore */ }
       }

@@ -2,22 +2,41 @@
   "users": [
     {
       "id": 1,
-      "name": "Test User",
-      "email": "test@test.com",
-      "password": "$2a$10$h2RDPwL55TGATS0vkjsyYeVzRCBPg0eCWrG.r67Gj2vkU4R7kuR3W",
-      "role": "user",
-      "created_at": "2026-08-27"
-    },
-    {
-      "id": 2,
-      "name": "Test User 2 Updated",
-      "email": "test2@test.com",
-      "password": "$2a$10$QDRwDLJ1lnZYHbOpbLv3auDx4fhBMPe1W2leOJKMIc8ZjLf04izOG",
+      "name": "Upload Test",
+      "email": "uploadtest@test.com",
+      "password": "$2a$10$M90i5HfeDvsawfMtxaflV.hgckL4tyDiFiETH4N/OssjyOrL4/RqO",
       "role": "user",
       "created_at": "2026-08-27"
     }
   ],
-  "books": [],
+  "books": [
+    {
+      "id": 1,
+      "title": "Test Book Title",
+      "author": "Test Author",
+      "category": "Ficción",
+      "description": "Test description",
+      "file_type": "PDF",
+      "file_name": "",
+      "file_path": "",
+      "uploader_id": 1,
+      "created_at": "2026-08-27",
+      "downloads": 0
+    },
+    {
+      "id": 2,
+      "title": "Libro de Prueba",
+      "author": "Autor Test",
+      "category": "Ficci�n",
+      "description": "Un libro de prueba",
+      "file_type": "PDF",
+      "file_name": "test-upload.pdf",
+      "file_path": "/uploads/1787817433598-781176.pdf",
+      "uploader_id": 1,
+      "created_at": "2026-08-27",
+      "downloads": 0
+    }
+  ],
   "tags": [],
   "favorites": [],
   "reading_history": [],

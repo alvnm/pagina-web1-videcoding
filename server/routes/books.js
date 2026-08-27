@@ -155,8 +155,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     // Clean up uploaded file if exists
-    if (result.file_url) {
-      const filePath = path.join(__dirname, '..', result.file_url);
+    if (result.file_path) {
+      const filePath = path.join(__dirname, '..', result.file_path);
       if (fs.existsSync(filePath)) {
         try { fs.unlinkSync(filePath); } catch { /* ignore */ }
       }
@@ -191,6 +191,8 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       try { tagList = JSON.parse(tags); } catch { tagList = String(tags).split(',').map(t => t.trim()).filter(Boolean); }
     }
 
+    console.log('📤 Creating book. User ID:', req.session.user.id, 'Type:', typeof req.session.user.id);
+    console.log('📤 Session user:', JSON.stringify(req.session.user));
     const book = await Store.createBook({
       title: title.trim(),
       author: author.trim(),
@@ -204,7 +206,8 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
     res.status(201).json({ book });
   } catch (err) {
     console.error('❌ book create error:', err.message);
-    res.status(500).json({ error: 'Error al crear documento.' });
+    console.error('❌ Full error:', JSON.stringify(err, null, 2));
+    res.status(500).json({ error: 'Error al crear documento: ' + err.message });
   }
 });
 

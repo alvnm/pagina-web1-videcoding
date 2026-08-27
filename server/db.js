@@ -217,7 +217,7 @@ const Store = {
         author,
         category,
         description: description || '',
-        file_url: file_url || '',
+        file_path: file_url || '',
         user_id: user_id,
         tags: tags || [],
         created_at: new Date().toISOString(),
@@ -225,7 +225,12 @@ const Store = {
       })
       .select('*')
       .single();
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase createBook error:', error.message);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error details:', error.details);
+      throw error;
+    }
 
     const [enriched] = await this._enrichBooks([book]);
     return enriched;
@@ -273,7 +278,7 @@ const Store = {
     if (book.user_id !== userId) return { error: 'forbidden' };
 
     await supabase.from('books').delete().eq('id', bookId);
-    return { deleted: true, file_url: book.file_url };
+    return { deleted: true, file_path: book.file_path };
   },
 
   // ===================== Stats =====================
@@ -534,7 +539,7 @@ const Store = {
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single();
     if (!book) return { error: 'not_found' };
     await supabase.from('books').delete().eq('id', bookId);
-    return { deleted: true, file_url: book.file_url };
+    return { deleted: true, file_path: book.file_path };
   },
 
   async adminDeleteUser(userId) {
@@ -548,8 +553,8 @@ const Store = {
     }
 
     // Get books by this user for cleanup
-    const { data: userBooks } = await supabase.from('books').select('file_url').eq('user_id', userId);
-    const deletedFileUrls = (userBooks || []).map(b => b.file_url);
+    const { data: userBooks } = await supabase.from('books').select('file_path').eq('user_id', userId);
+    const deletedFileUrls = (userBooks || []).map(b => b.file_path);
 
     await supabase.from('users').delete().eq('id', userId);
     return { deleted: true, deletedFileUrls };
