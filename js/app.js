@@ -865,7 +865,7 @@ const App = (() => {
   }
 
   // ---- Profile tabs ----
-  function switchProfileTab(tabName, btnEl) {
+  async function switchProfileTab(tabName, btnEl) {
     // Update active tab button
     document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
     btnEl.classList.add('active');
@@ -874,6 +874,21 @@ const App = (() => {
     document.querySelectorAll('.profile-tab-content').forEach(c => c.style.display = 'none');
     const target = document.getElementById('tab-' + tabName);
     if (target) target.style.display = 'block';
+
+    // Re-fetch favorites when opening the favorites tab
+    if (tabName === 'favorites' && _session) {
+      try {
+        const favorites = await Store.getUserFavorites(_session.id);
+        const grid = target ? target.querySelector('.books-grid') : null;
+        if (grid) {
+          if (favorites.length > 0) {
+            grid.innerHTML = favorites.map(b => Components.renderBookCard(b, true, true)).join('');
+          } else {
+            grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❤️</div><p class="empty-state-text">Aún no tienes favoritos.</p></div>';
+          }
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   // ---- Tags input ----
