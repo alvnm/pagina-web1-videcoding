@@ -9,10 +9,9 @@ const bcrypt = require('bcryptjs');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'biblioteca.json');
 
-// Ensure data dir
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
 // ---- Helpers ----
+let _canWrite = true;
+
 function _readDB() {
   try {
     return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
@@ -22,7 +21,14 @@ function _readDB() {
 }
 
 function _writeDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  if (!_canWrite) return; // Silently skip on read-only filesystem (e.g. Vercel)
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('⚠️  No se pudo escribir la base de datos:', err.message);
+    _canWrite = false;
+  }
 }
 
 function _nextId(collection) {
