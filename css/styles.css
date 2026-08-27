@@ -1262,6 +1262,24 @@ select {
   color: var(--color-accent);
 }
 
+/* Half-star display (average rating) */
+.star-half {
+  position: relative;
+  display: inline-block;
+  color: var(--color-border);
+}
+.star-half-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50%;
+  overflow: hidden;
+  color: var(--color-accent);
+}
+.star-half-empty {
+  color: var(--color-border);
+}
+
 .rating-text {
   font-size: 0.85rem;
   color: var(--color-text-muted);
@@ -1300,6 +1318,28 @@ select {
 .rating-star-btn.active {
   color: var(--color-accent);
   transform: scale(1.15);
+}
+
+/* Half-star interactive button */
+.rating-star-btn.half {
+  position: relative;
+  color: var(--color-border);
+}
+.rating-star-btn.half::after {
+  content: '★';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50%;
+  overflow: hidden;
+  color: var(--color-accent);
+}
+
+.rating-hint {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin: 0;
+  width: 100%;
 }
 
 /* --- Owner Actions --- */

@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS reading_history (
 CREATE TABLE IF NOT EXISTS ratings (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   book_id UUID REFERENCES books(id) ON DELETE CASCADE,
-  score INT NOT NULL CHECK (score >= 1 AND score <= 5),
+  score DECIMAL(2,1) NOT NULL CHECK (score >= 0.5 AND score <= 5),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, book_id)
 );

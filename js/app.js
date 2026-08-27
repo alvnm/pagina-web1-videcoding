@@ -148,27 +148,84 @@ const App = (() => {
     }
   }
 
-  async function rateBook(bookId, score) {
+  async function rateBook(bookId, starIndex) {
     if (!_session) {
       Components.showToast('Debes iniciar sesión para calificar.', 'error');
       return;
     }
     try {
-      const result = await Store.rateBook(bookId, score);
-      // Update UI
-      const btns = document.querySelectorAll('.rating-star-btn');
-      btns.forEach((btn, i) => {
-        btn.classList.toggle('active', i < score);
-      });
+      // Read current rating from the interactive container
+      const container = document.getElementById('rating-stars-input');
+      const currentRating = container ? parseFloat(container.dataset.current || '0') : 0;
+
+      // Determine the new score: toggle between full and half
+      const fullVal = starIndex;        // e.g. clicking star 4 → 4.0
+      const halfVal = starIndex - 0.5;   // e.g. clicking star 4 again → 3.5
+
+      let newScore;
+      if (currentRating === fullVal) {
+        newScore = halfVal;              // full → half
+      } else if (currentRating === halfVal) {
+        newScore = fullVal;              // half → full
+      } else {
+        newScore = fullVal;              // different star → set full
+      }
+
+      const result = await Store.rateBook(bookId, newScore);
+
+      // Update interactive stars UI
+      if (container) {
+        container.dataset.current = String(newScore);
+        const btns = container.querySelectorAll('.rating-star-btn');
+        btns.forEach((btn, idx) => {
+          const i = idx + 1;
+          btn.classList.remove('active', 'half');
+          if (i <= Math.floor(newScore)) {
+            btn.classList.add('active');
+          } else if (i === Math.ceil(newScore) && newScore % 1 !== 0) {
+            btn.classList.add('half');
+          }
+        });
+      }
+
+      // Update current value label
+      const valEl = document.getElementById('rating-current-value');
+      if (valEl) valEl.textContent = newScore.toFixed(1);
+
       // Update average display
       const ratingText = document.querySelector('.rating-text');
       if (ratingText && result.rating) {
         ratingText.textContent = `${result.rating.average ? result.rating.average.toFixed(1) : '0.0'} de 5 · ${result.rating.count} calificacion${result.rating.count !== 1 ? 'es' : ''}`;
       }
-      Components.showToast(`Calificación: ${score} ⭐`, 'success');
+
+      // Update display stars (average)
+      _updateDisplayStars(result.rating ? result.rating.average : 0);
+
+      Components.showToast(`Calificación: ${newScore.toFixed(1)} ⭐`, 'success');
     } catch (err) {
       Components.showToast(err.message, 'error');
     }
+  }
+
+  function _updateDisplayStars(average) {
+    const container = document.querySelector('.rating-stars');
+    if (!container) return;
+    const avgFloor = Math.floor(average);
+    const hasHalf = (average % 1) >= 0.25 && (average % 1) < 0.75;
+    const avgRoundUp = Math.ceil(average);
+    let html = '';
+    for (let i = 1; i <= 5; i++) {
+      if (i <= avgFloor) {
+        html += '<span class="star star-filled">★</span>';
+      } else if (i === avgRoundUp && hasHalf) {
+        html += '<span class="star star-half"><span class="star-half-fill">★</span><span class="star-half-empty">★</span></span>';
+      } else if (i <= avgRoundUp && !hasHalf && average > 0) {
+        html += '<span class="star star-filled">★</span>';
+      } else {
+        html += '<span class="star">★</span>';
+      }
+    }
+    container.innerHTML = html;
   }
 
   async function downloadBook(bookId) {

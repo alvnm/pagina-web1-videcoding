@@ -290,7 +290,7 @@ router.post('/:id/favorite', requireAuth, async (req, res) => {
 
 // ---- Ratings ----
 
-// POST /api/books/:id/rate — set or update rating (1-5)
+// POST /api/books/:id/rate — set or update rating (0.5-5 in 0.5 steps)
 router.post('/:id/rate', requireAuth, async (req, res) => {
   try {
     const book = await Store.bookById(req.params.id);
@@ -298,16 +298,16 @@ router.post('/:id/rate', requireAuth, async (req, res) => {
 
     const { score } = req.body;
     if (score === undefined || score === null) {
-      return res.status(400).json({ error: 'Debes proporcionar una puntuación (1-5).' });
+      return res.status(400).json({ error: 'Debes proporcionar una puntuación (0.5-5).' });
     }
 
     const numScore = Number(score);
-    if (isNaN(numScore) || numScore < 1 || numScore > 5) {
-      return res.status(400).json({ error: 'La puntuación debe ser un número entre 1 y 5.' });
+    if (isNaN(numScore) || numScore < 0.5 || numScore > 5) {
+      return res.status(400).json({ error: 'La puntuación debe ser un número entre 0.5 y 5.' });
     }
 
     const stats = await Store.setRating(req.session.user.id, req.params.id, numScore);
-    res.json({ ok: true, rating: stats, userRating: numScore });
+    res.json({ ok: true, rating: stats, userRating: stats.average });
   } catch (err) {
     console.error('❌ rate error:', err.message);
     res.status(500).json({ error: 'Error al calificar.' });

@@ -793,20 +793,42 @@ const Components = (() => {
   }
 
   function _renderStars(average, bookId, userRating, isLoggedIn, ratingCount = 0) {
+    // Display stars for the average rating (supports half-stars)
     const stars = [];
+    const avgFloor = Math.floor(average);
+    const hasHalf = (average % 1) >= 0.25 && (average % 1) < 0.75;
+    const avgRoundUp = Math.ceil(average);
     for (let i = 1; i <= 5; i++) {
-      const filled = i <= Math.round(average);
-      stars.push(`<span class="star ${filled ? 'star-filled' : ''}">★</span>`);
+      if (i <= avgFloor) {
+        stars.push(`<span class="star star-filled">★</span>`);
+      } else if (i === avgRoundUp && hasHalf) {
+        stars.push(`<span class="star star-half"><span class="star-half-fill">★</span><span class="star-half-empty">★</span></span>`);
+      } else if (i <= avgRoundUp && !hasHalf && average > 0) {
+        stars.push(`<span class="star star-filled">★</span>`);
+      } else {
+        stars.push(`<span class="star">★</span>`);
+      }
     }
 
+    // Interactive stars for the logged-in user (supports half-stars via double-click)
     let interactiveHtml = '';
     if (isLoggedIn) {
+      const urFloor = Math.floor(userRating);
+      const urHasHalf = (userRating % 1) >= 0.25;
+      const urRoundUp = Math.ceil(userRating);
+      const interactiveStars = [1,2,3,4,5].map(i => {
+        let cls = '';
+        if (i <= urFloor) cls = 'active';
+        else if (i === urRoundUp && urHasHalf && userRating > 0) cls = 'half';
+        return `<button class="rating-star-btn ${cls}" onclick="App.rateBook('${bookId}', ${i})" title="${i} estrella${i>1?'s':''}">★</button>`;
+      }).join('');
       interactiveHtml = `
         <div class="rating-interactive" id="rating-interactive">
-          <span class="rating-label">Tu calificación:</span>
-          <div class="rating-stars-input">
-            ${[1,2,3,4,5].map(i => `<button class="rating-star-btn ${i <= userRating ? 'active' : ''}" onclick="App.rateBook('${bookId}', ${i})" title="${i} estrella${i>1?'s':''}">★</button>`).join('')}
+          <span class="rating-label">Tu calificación: <strong id="rating-current-value">${userRating > 0 ? userRating.toFixed(1) : '-'}</strong></span>
+          <div class="rating-stars-input" id="rating-stars-input" data-book-id="${bookId}" data-current="${userRating}">
+            ${interactiveStars}
           </div>
+          <p class="rating-hint">Clic en una estrella = entero · Clic de nuevo = media</p>
         </div>
       `;
     }

@@ -404,7 +404,7 @@ const Store = {
   // ===================== Ratings =====================
 
   async setRating(userId, bookId, score) {
-    score = Math.max(1, Math.min(5, Math.round(Number(score))));
+    score = Math.max(0.5, Math.min(5, Math.round(Number(score) * 2) / 2));
 
     const { data: existing } = await supabase
       .from('ratings')
@@ -423,12 +423,15 @@ const Store = {
 
   async getRatingStats(bookId) {
     const { data: ratings } = await supabase.from('ratings').select('score').eq('book_id', bookId);
-    if (!ratings || ratings.length === 0) return { average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
-    const sum = ratings.reduce((s, r) => s + r.score, 0);
-    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    for (const r of ratings) distribution[r.score]++;
+    if (!ratings || ratings.length === 0) return { average: 0, count: 0, distribution: {} };
+    const sum = ratings.reduce((s, r) => s + Number(r.score), 0);
+    const distribution = {};
+    for (const r of ratings) {
+      const key = String(Number(r.score));
+      distribution[key] = (distribution[key] || 0) + 1;
+    }
     return {
-      average: Math.round((sum / ratings.length) * 10) / 10,
+      average: Math.round((sum / ratings.length) * 2) / 2,
       count: ratings.length,
       distribution,
     };
