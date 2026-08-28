@@ -473,19 +473,14 @@ router.post('/', requireAuth, (req, res, next) => {
       bookCoverUrl = '/uploads/' + coverFile.filename;
     }
 
-    // If no cover provided, auto-generate from the book file
-    // Priority: PDF/EPUB first page → Open Library → Placeholder SVG
+    // If no cover provided, use placeholder immediately (non-blocking)
+    // Real cover will be generated in background after response
+    let needsAutoCover = false;
     if (!bookCoverUrl) {
-      try {
-        const autoCover = await coverService.autoGenerateCover(
-          title.trim(), author.trim(), category, 'pending', bookFileUrl
-        );
-        if (autoCover) {
-          bookCoverUrl = autoCover;
-        }
-      } catch (coverErr) {
-        console.error('⚠️ Auto-cover generation failed:', coverErr.message);
-      }
+      bookCoverUrl = coverService.savePlaceholderCover(
+        title.trim(), author.trim(), category, 'pending'
+      );
+      needsAutoCover = true;
     }
 
     // Parse tags
@@ -505,7 +500,22 @@ router.post('/', requireAuth, (req, res, next) => {
       tags: tagList,
     });
 
+    // Respond immediately — don't wait for cover generation
     res.status(201).json({ book });
+
+    // Generate real cover in background (non-blocking)
+    if (needsAutoCover && bookFileUrl) {
+      coverService.autoGenerateCover(
+        title.trim(), author.trim(), category, book.id, bookFileUrl
+      ).then(async (realCover) => {
+        if (realCover && realCover !== bookCoverUrl) {
+          await Store.updateBookCover(book.id, realCover);
+          console.log(`🖼️ Background cover generated for "${title}":`, realCover);
+        }
+      }).catch((err) => {
+        console.error('⚠️ Background cover generation failed:', err.message);
+      });
+    }
   } catch (err) {
     console.error('❌ book create error:', err.message);
     console.error('❌ Full error:', JSON.stringify(err, null, 2));
