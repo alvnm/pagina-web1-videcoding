@@ -81,25 +81,54 @@ function _fetchBuffer(url, timeoutMs = 10000) {
 async function searchOpenLibraryCover(title, author) {
   if (!title) return null;
   try {
-    const searchQuery = encodeURIComponent(title + (author ? ' ' + author : ''));
+    // Search by title only for better results
+    const searchQuery = encodeURIComponent(title);
     const data = await _fetchJSON(
-      `https://openlibrary.org/search.json?title=${searchQuery}&limit=5`
+      `https://openlibrary.org/search.json?title=${searchQuery}&limit=10`
     );
     if (!data || !data.docs || data.docs.length === 0) return null;
 
-    // Find the best match
+    // Score results by title+author similarity
+    const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9áéíóúñü]/g, '');
+    const normalizedAuthor = (author || '').toLowerCase().replace(/[^a-z0-9áéíóúñü]/g, '');
+
+    let bestDoc = null;
+    let bestScore = -1;
+
     for (const doc of data.docs) {
-      // Prefer edition covers
-      if (doc.cover_i) {
-        const coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-        return coverUrl;
+      let score = 0;
+
+      // Title similarity: exact match = 10, contains = 5, partial = 2
+      const docTitle = (doc.title || '').toLowerCase().replace(/[^a-z0-9áéíóúñü]/g, '');
+      if (docTitle === normalizedTitle) score += 10;
+      else if (docTitle.includes(normalizedTitle) || normalizedTitle.includes(docTitle)) score += 5;
+      else if (normalizedTitle.split('').filter(c => docTitle.includes(c)).length > normalizedTitle.length * 0.5) score += 2;
+
+      // Author similarity
+      if (normalizedAuthor && doc.author_name) {
+        const docAuthorStr = doc.author_name.join(' ').toLowerCase().replace(/[^a-z0-9áéíóúñü]/g, '');
+        if (docAuthorStr.includes(normalizedAuthor) || normalizedAuthor.includes(docAuthorStr)) score += 8;
+        else if (docAuthorStr.split(' ').some(w => normalizedAuthor.includes(w) && w.length > 3)) score += 3;
       }
-      // Try ISBN covers
-      if (doc.isbn && doc.isbn.length > 0) {
-        const isbn = doc.isbn[doc.isbn.length - 1]; // last ISBN usually best
-        const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-        return coverUrl;
+
+      // Has cover = bonus
+      if (doc.cover_i) score += 1;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestDoc = doc;
       }
+    }
+
+    if (!bestDoc || bestScore < 3) return null;
+
+    // Get cover URL from best match
+    if (bestDoc.cover_i) {
+      return `https://covers.openlibrary.org/b/id/${bestDoc.cover_i}-L.jpg`;
+    }
+    if (bestDoc.isbn && bestDoc.isbn.length > 0) {
+      const isbn = bestDoc.isbn[bestDoc.isbn.length - 1];
+      return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
     }
     return null;
   } catch (err) {
@@ -321,7 +350,7 @@ async function downloadCoverLocally(url, prefix) {
  * @param {string} bookFileUrl - URL/path of the uploaded document file (for extraction)
  * @returns {string} Cover URL (local path, remote URL, or data URI)
  */
-async function autoGenerateCover(title, author, category, bookId, bookFileUrl) {
+async function autoGenerateCover(title, author, category, bookId, bookFileUrl, retries = 2) {
   console.log(`🔍 Auto-generating cover for "${title}" by ${author}...`);
   console.log(`📁 Book file URL: ${bookFileUrl || '(none)'}`);
 
@@ -338,18 +367,24 @@ async function autoGenerateCover(title, author, category, bookId, bookFileUrl) {
     }
   }
 
-  // Priority 2: Open Library API
-  try {
-    const olCover = await searchOpenLibraryCover(title, author);
-    if (olCover) {
-      console.log('📚 Found cover on Open Library:', olCover);
-      return olCover;
+  // Priority 2: Open Library API (with retry)
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const olCover = await searchOpenLibraryCover(title, author);
+      if (olCover) {
+        console.log(`📚 Found cover on Open Library (attempt ${attempt}):`, olCover);
+        return olCover;
+      }
+    } catch (err) {
+      console.error(`⚠️ Open Library search failed (attempt ${attempt}):`, err.message);
     }
-  } catch (err) {
-    console.error('⚠️ Open Library search failed:', err.message);
+    if (attempt < retries) {
+      // Wait before retry (exponential backoff)
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
   }
 
-  // Priority 3: Placeholder SVG
+  // Priority 3: Placeholder SVG (use actual book ID, not 'pending')
   console.log('🎨 Generating placeholder cover for:', title);
   try {
     const placeholder = savePlaceholderCover(title, author, category, bookId);
