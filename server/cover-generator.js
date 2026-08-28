@@ -165,10 +165,22 @@ async function _extractPDFFirstPage(pdfPath) {
     const scale = Math.min(maxWidth / unscaledViewport.width, 2.0);
     const viewport = page.getViewport({ scale });
 
-    const canvas = createCanvas(viewport.width, viewport.height);
+    // Add generous padding so no content gets cropped
+    const padX = Math.round(viewport.width * 0.05);
+    const padTop = Math.round(viewport.height * 0.08);
+    const padBottom = Math.round(viewport.height * 0.08);
+    const canvasW = viewport.width + padX * 2;
+    const canvasH = viewport.height + padTop + padBottom;
+
+    const canvas = createCanvas(canvasW, canvasH);
     const ctx = canvas.getContext('2d');
 
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    // Fill background white so margins look clean
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // Render PDF page centered with padding
+    await page.render({ canvasContext: ctx, viewport, transform: [1, 0, 0, 1, padX, padTop] }).promise;
 
     const pngBuffer = canvas.toBuffer('image/png');
 

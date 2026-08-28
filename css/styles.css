@@ -741,7 +741,6 @@ select {
 .detail-cover {
   background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary-dark));
   border-radius: var(--radius-lg);
-  aspect-ratio: 3 / 4;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3018,8 +3017,7 @@ body.dark-mode .doc-viewer-header {
 /* Book card cover image */
 .book-card-cover-img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
   display: block;
 }
 
@@ -3030,7 +3028,7 @@ body.dark-mode .doc-viewer-header {
 
 .book-card-cover--full {
   position: relative;
-  aspect-ratio: 3 / 4;
+  height: auto;
   border-radius: 12px;
   overflow: hidden;
 }
