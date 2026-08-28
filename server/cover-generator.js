@@ -1,8 +1,9 @@
 /* ============================================
    Cover Generator — Extract first page from PDF/EPUB as cover image
    Uses pdfjs-dist + @napi-rs/canvas for PDFs
-   Uses epub2 for EPUB cover extraction
-   Downloads remote files temporarily when needed
+   Uses adm-zip for EPUB cover extraction
+   Uploads generated covers to Supabase Storage for persistence on Vercel
+   Falls back to local disk for local development
    ============================================ */
 
 const path = require('path');
@@ -12,47 +13,133 @@ const http = require('http');
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
+// Supabase client (lazy init)
+let _supabase = null;
+function _getSupabase() {
+  if (!_supabase) {
+    try {
+      _supabase = require('./supabase');
+    } catch (e) {
+      console.log('⚠️ Supabase not available for cover uploads');
+    }
+  }
+  return _supabase;
+}
+
+// Is running on Vercel serverless?
+const IS_VERCEL = !!process.env.VERCEL;
+
+/**
+ * Upload a buffer to Supabase Storage and return the public URL
+ * Falls back to local disk if Supabase is not available
+ * @param {Buffer} buffer - Image data
+ * @param {string} filename - Filename for the upload
+ * @returns {string} Public URL or local path
+ */
+async function _uploadCover(buffer, filename) {
+  const supabase = _getSupabase();
+
+  // On Vercel or when Supabase is available → upload to Supabase Storage
+  if (supabase) {
+    try {
+      const filePath = `portadas/${filename}`;
+      const { error } = await supabase.storage
+        .from('documentos')
+        .upload(filePath, buffer, {
+          contentType: filename.endsWith('.png') ? 'image/png' : 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) {
+        console.error('⚠️ Supabase upload error:', error.message);
+      } else {
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('documentos')
+          .getPublicUrl(filePath);
+
+        if (urlData && urlData.publicUrl) {
+          const publicUrl = urlData.publicUrl;
+          console.log(`✅ Cover uploaded to Supabase: ${publicUrl}`);
+          return publicUrl;
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Supabase upload failed:', err.message);
+    }
+  }
+
+  // Fallback: save to local disk (works for local dev)
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+    const filePath = path.join(UPLOAD_DIR, filename);
+    fs.writeFileSync(filePath, buffer);
+    const localPath = `/uploads/${filename}`;
+    console.log(`✅ Cover saved locally: ${localPath}`);
+    return localPath;
+  } catch (err) {
+    console.error('⚠️ Local save failed:', err.message);
+    return null;
+  }
+}
+
 /**
  * Download a file from a URL to a temporary local path
  * @param {string} url - Remote URL
- * @returns {string} Path to the temporary file
+ * @returns {object} { tempPath, cleanup }
  */
-function _downloadTempFile(url, extHint) {
+function _downloadTempFile(url) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
-    const ext = extHint || '.pdf';
-    const tempPath = path.join(UPLOAD_DIR, `_temp_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`);
+    const tempPath = path.join(UPLOAD_DIR, `_temp_${Date.now()}_${Math.round(Math.random() * 1e6)}.pdf`);
+
+    // Ensure uploads dir exists
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+
     const file = fs.createWriteStream(tempPath);
 
     proto.get(url, { headers: { 'User-Agent': 'BibliotecaComunitaria/1.0' } }, (res) => {
       // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         file.close();
-        fs.unlinkSync(tempPath);
-        return _downloadTempFile(res.headers.location, extHint).then(resolve, reject);
+        try { fs.unlinkSync(tempPath); } catch {}
+        return _downloadTempFile(res.headers.location).then(resolve, reject);
       }
       if (res.statusCode !== 200) {
         file.close();
-        fs.unlinkSync(tempPath);
+        try { fs.unlinkSync(tempPath); } catch {}
         return reject(new Error(`HTTP ${res.statusCode}`));
       }
       res.pipe(file);
-      file.on('finish', () => { file.close(); resolve(tempPath); });
-      file.on('error', (err) => { fs.unlinkSync(tempPath); reject(err); });
+      file.on('finish', () => {
+        file.close();
+        resolve({
+          tempPath,
+          cleanup: () => { try { fs.unlinkSync(tempPath); } catch {} }
+        });
+      });
+      file.on('error', (err) => {
+        try { fs.unlinkSync(tempPath); } catch {}
+        reject(err);
+      });
     }).on('error', (err) => {
       file.close();
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      try { fs.unlinkSync(tempPath); } catch {}
       reject(err);
     });
   });
 }
 
 /**
- * Extract the first page of a local PDF file as a PNG image
+ * Extract the first page of a local PDF file as a PNG image buffer
  * @param {string} pdfPath - Absolute path to the PDF file
- * @returns {string|null} - Relative path to the generated cover image, or null if failed
+ * @returns {Buffer|null} - PNG image buffer, or null if failed
  */
-async function generateCoverFromPDF(pdfPath) {
+async function _extractPDFFirstPage(pdfPath) {
   if (!fs.existsSync(pdfPath)) {
     console.error('❌ PDF file not found:', pdfPath);
     return null;
@@ -90,44 +177,31 @@ async function generateCoverFromPDF(pdfPath) {
       return null;
     }
 
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
-
-    const filename = `cover-pdf-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-    fs.writeFileSync(filePath, pngBuffer);
-
-    const relativePath = `/uploads/${filename}`;
-    console.log(`✅ Cover extracted from PDF: ${relativePath} (${(pngBuffer.length / 1024).toFixed(1)} KB, ${viewport.width}x${viewport.height})`);
-
-    return relativePath;
+    console.log(`✅ PDF first page extracted: ${(pngBuffer.length / 1024).toFixed(1)} KB, ${viewport.width}x${Math.round(viewport.height)}`);
+    return pngBuffer;
   } catch (err) {
-    console.error('⚠️ Error generating cover from PDF:', err.message);
+    console.error('⚠️ Error extracting PDF first page:', err.message);
     return null;
   }
 }
 
 /**
  * Extract cover image from an EPUB file
- * EPUBs often have a cover image embedded. We extract it.
  * @param {string} epubPath - Absolute path to the EPUB file
- * @returns {string|null} - Relative path to the extracted cover image, or null
+ * @returns {Buffer|null} - Image buffer, or null
  */
-async function generateCoverFromEPUB(epubPath) {
+async function _extractEPUBCover(epubPath) {
   if (!fs.existsSync(epubPath)) {
     console.error('❌ EPUB file not found:', epubPath);
     return null;
   }
 
   try {
-    // Try to use @napi-rs/canvas for EPUB: read the zip structure
     const AdmZip = require('adm-zip');
     const zip = new AdmZip(epubPath);
     const entries = zip.getEntries();
 
     // Find cover image in EPUB
-    // Common paths: OEBPS/cover.jpg, OEBPS/images/cover.jpg, cover.jpg, etc.
     const coverPatterns = [
       /cover\.(jpg|jpeg|png|gif|webp)/i,
       /OEBPS\/images?\/cover/i,
@@ -154,15 +228,12 @@ async function generateCoverFromEPUB(epubPath) {
       const opfEntry = entries.find(e => /content\.opf$/i.test(e.entryName));
       if (opfEntry) {
         const opfContent = opfEntry.getData().toString('utf8');
-        // Look for cover-image meta
         const coverMatch = opfContent.match(/cover-image/i);
         if (coverMatch) {
-          // Find the item with id="cover-image" or properties="cover-image"
           const itemMatch = opfContent.match(/<item[^>]+(?:id="cover-image"|properties="cover-image")[^>]+href="([^"]+)"/i)
             || opfContent.match(/<item[^>]+href="([^"]+)"[^>]+(?:id="cover-image"|properties="cover-image")/i);
           if (itemMatch && itemMatch[1]) {
             const coverHref = itemMatch[1];
-            // Find the entry matching this href
             const dirPath = path.dirname(opfEntry.entryName);
             const fullCoverPath = dirPath === '.' ? coverHref : dirPath + '/' + coverHref;
             coverEntry = entries.find(e => e.entryName === fullCoverPath || e.entryName.endsWith('/' + coverHref));
@@ -190,7 +261,6 @@ async function generateCoverFromEPUB(epubPath) {
       return null;
     }
 
-    const ext = path.extname(coverEntry.entryName).toLowerCase();
     const imageBuffer = coverEntry.getData();
 
     if (!imageBuffer || imageBuffer.length < 500) {
@@ -198,43 +268,34 @@ async function generateCoverFromEPUB(epubPath) {
       return null;
     }
 
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
-
-    const filename = `cover-epub-${Date.now()}-${Math.round(Math.random() * 1e4)}${ext}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-    fs.writeFileSync(filePath, imageBuffer);
-
-    const relativePath = `/uploads/${filename}`;
-    console.log(`✅ Cover extracted from EPUB: ${relativePath} (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
-    return relativePath;
+    console.log(`✅ EPUB cover extracted: ${(imageBuffer.length / 1024).toFixed(1)} KB from ${coverEntry.entryName}`);
+    return imageBuffer;
   } catch (err) {
-    console.error('⚠️ Error generating cover from EPUB:', err.message);
+    console.error('⚠️ Error extracting EPUB cover:', err.message);
     return null;
   }
 }
 
 /**
- * Main function: Generate cover from a book file (local or remote)
- * Tries PDF first page extraction → EPUB cover extraction
+ * Generate cover from a book file (local or remote)
+ * Extracts first page/cover → uploads to Supabase Storage → returns public URL
  * @param {string} fileUrl - Local path (e.g. '/uploads/file.pdf') or remote URL (https://...)
- * @returns {string|null} - Relative path to generated cover, or null
+ * @returns {string|null} - Public URL or local path to the cover image, or null
  */
 async function generateCoverFromFile(fileUrl) {
   if (!fileUrl) return null;
 
   const isRemote = fileUrl.startsWith('http');
   let localPath = null;
-  let tempFile = false;
+  let cleanup = null;
 
   try {
     if (isRemote) {
       // Download to temp file first
       console.log('📥 Downloading remote file for cover extraction:', fileUrl.substring(0, 80));
-      const extHint = path.extname(fileUrl.split('?')[0]).toLowerCase() || '.pdf';
-      localPath = await _downloadTempFile(fileUrl, extHint);
-      tempFile = true;
+      const downloaded = await _downloadTempFile(fileUrl);
+      localPath = downloaded.tempPath;
+      cleanup = downloaded.cleanup;
     } else {
       // Resolve local path: fileUrl is like '/uploads/file.pdf'
       localPath = path.join(__dirname, fileUrl.replace(/^\/+/, ''));
@@ -246,28 +307,48 @@ async function generateCoverFromFile(fileUrl) {
     }
 
     const ext = path.extname(localPath).toLowerCase();
+    let imageBuffer = null;
 
     if (ext === '.pdf') {
       console.log('📄 Extracting cover from PDF:', localPath);
-      return await generateCoverFromPDF(localPath);
-    }
-
-    if (ext === '.epub') {
+      imageBuffer = await _extractPDFFirstPage(localPath);
+    } else if (ext === '.epub') {
       console.log('📚 Extracting cover from EPUB:', localPath);
-      return await generateCoverFromEPUB(localPath);
+      imageBuffer = await _extractEPUBCover(localPath);
+    } else {
+      console.log(`ℹ️ No cover extraction supported for ${ext} files`);
+      return null;
     }
 
-    console.log(`ℹ️ No cover extraction supported for ${ext} files`);
-    return null;
+    if (!imageBuffer) return null;
+
+    // Upload to Supabase Storage (or local disk as fallback)
+    const timestamp = Date.now();
+    const random = Math.round(Math.random() * 1e4);
+    const filename = `cover-${ext.replace('.', '')}-${timestamp}-${random}.png`;
+    const coverUrl = await _uploadCover(imageBuffer, filename);
+
+    return coverUrl;
   } catch (err) {
     console.error('⚠️ generateCoverFromFile error:', err.message);
     return null;
   } finally {
     // Clean up temp file
-    if (tempFile && localPath && fs.existsSync(localPath)) {
-      try { fs.unlinkSync(localPath); } catch { /* ignore */ }
-    }
+    if (cleanup) cleanup();
   }
 }
 
-module.exports = { generateCoverFromPDF, generateCoverFromEPUB, generateCoverFromFile };
+/**
+ * Legacy: Generate cover from a local PDF file (for backward compatibility)
+ * @param {string} pdfPath - Absolute path to the PDF file
+ * @returns {string|null} - Path/URL to the generated cover image
+ */
+async function generateCoverFromPDF(pdfPath) {
+  const buffer = await _extractPDFFirstPage(pdfPath);
+  if (!buffer) return null;
+
+  const filename = `cover-pdf-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
+  return await _uploadCover(buffer, filename);
+}
+
+module.exports = { generateCoverFromPDF, generateCoverFromFile };
