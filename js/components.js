@@ -442,13 +442,31 @@ const Components = (() => {
     ` : '';
 
     // Show cover image if available, otherwise use gradient with icon
-    const coverContent = book.cover_url
+    const hasCover = !!book.cover_url;
+    const coverContent = hasCover
       ? `<img src="${escapeHtml(book.cover_url)}" alt="Portada de ${escapeHtml(book.title)}" class="book-card-cover-img" />`
       : `${getFileIcon(book.fileType)}`;
 
+    // If cover exists: show only the image with a minimal title overlay at the bottom
+    // If no cover: show the full card with body
+    if (hasCover) {
+      return `
+        <div class="book-card book-card--cover-only" onclick="Router.navigate('/book/${book.id}')">
+          <div class="book-card-cover book-card-cover--full">
+            <span class="file-badge">${escapeHtml(book.fileType || 'PDF')}</span>
+            ${favBtn}
+            ${coverContent}
+            <div class="book-card-overlay">
+              <div class="book-card-overlay-title">${escapeHtml(book.title)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="book-card" onclick="Router.navigate('/book/${book.id}')">
-        <div class="book-card-cover" style="${book.cover_url ? '' : 'background:' + getCoverGradient(book.id)}">
+        <div class="book-card-cover" style="background:${getCoverGradient(book.id)}">
           <span class="file-badge">${escapeHtml(book.fileType || 'PDF')}</span>
           ${favBtn}
           ${coverContent}
