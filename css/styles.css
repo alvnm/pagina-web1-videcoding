@@ -1190,10 +1190,6 @@ select {
     height: 150px;
   }
 
-  .book-card-cover--full {
-    height: 200px;
-  }
-
   .book-card-overlay-title {
     font-size: 0.72rem;
   }
@@ -1415,10 +1411,6 @@ select {
 
   .book-card-cover {
     height: 130px;
-  }
-
-  .book-card-cover--full {
-    height: 170px;
   }
 
   .book-card-overlay-title {
@@ -3026,11 +3018,8 @@ body.dark-mode .doc-viewer-header {
 /* Book card cover image */
 .book-card-cover-img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  position: absolute;
-  top: 0;
-  left: 0;
+  height: auto;
+  display: block;
 }
 
 /* Cover-only card: no body, just the image with title overlay */
@@ -3039,10 +3028,9 @@ body.dark-mode .doc-viewer-header {
 }
 
 .book-card-cover--full {
-  height: 260px;
   position: relative;
-  overflow: hidden;
   border-radius: 12px;
+  overflow: hidden;
 }
 
 .book-card-overlay {
@@ -3071,8 +3059,9 @@ body.dark-mode .doc-viewer-header {
 .detail-cover-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 12px;
+  background: var(--color-surface-alt);
 }
 
 /* Cover upload zone */
