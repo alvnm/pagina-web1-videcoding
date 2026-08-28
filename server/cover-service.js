@@ -9,12 +9,12 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
-// Import PDF cover generator
-let generateCoverFromPDF;
+// Import cover generator (PDF + EPUB extraction)
+let generateCoverFromFile;
 try {
-  ({ generateCoverFromPDF } = require('./cover-generator'));
+  ({ generateCoverFromFile } = require('./cover-generator'));
 } catch (e) {
-  console.log('⚠️ cover-generator not available for PDF extraction');
+  console.log('⚠️ cover-generator not available for file extraction');
 }
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -317,33 +317,24 @@ async function downloadCoverLocally(url, prefix) {
 
 /**
  * Main function: Try to get a cover for a book
- * Priority: PDF first page → Open Library → Placeholder SVG
- * @param {string} bookFileUrl - URL/path of the uploaded document file (for PDF extraction)
+ * Priority: PDF/EPUB first page → Open Library → Placeholder SVG
+ * @param {string} bookFileUrl - URL/path of the uploaded document file (for extraction)
  * @returns {string} Cover URL (local path, remote URL, or data URI)
  */
 async function autoGenerateCover(title, author, category, bookId, bookFileUrl) {
   console.log(`🔍 Auto-generating cover for "${title}" by ${author}...`);
   console.log(`📁 Book file URL: ${bookFileUrl || '(none)'}`);
 
-  // Priority 1: Extract first page from local PDF
-  if (bookFileUrl && !bookFileUrl.startsWith('http') && generateCoverFromPDF) {
+  // Priority 1: Extract first page/cover from the actual book file (local or remote)
+  if (bookFileUrl && generateCoverFromFile) {
     try {
-      const ext = path.extname(bookFileUrl.split('?')[0]).toLowerCase();
-      if (ext === '.pdf') {
-        // file_url is like '/uploads/file.pdf' — file is in server/uploads/
-        const absPath = path.join(__dirname, bookFileUrl.replace(/^\/+/, ''));
-        console.log('📄 PDF path:', absPath, 'exists:', fs.existsSync(absPath));
-        if (fs.existsSync(absPath)) {
-          console.log('📄 Attempting PDF first page extraction:', absPath);
-          const coverPath = await generateCoverFromPDF(absPath);
-          if (coverPath) {
-            console.log('🖼️ Cover extracted from PDF first page:', coverPath);
-            return coverPath;
-          }
-        }
+      const fileCover = await generateCoverFromFile(bookFileUrl);
+      if (fileCover) {
+        console.log('🖼️ Cover extracted from book file:', fileCover);
+        return fileCover;
       }
     } catch (err) {
-      console.error('⚠️ PDF cover extraction failed:', err.message);
+      console.error('⚠️ File cover extraction failed:', err.message);
     }
   }
 
@@ -372,7 +363,7 @@ async function autoGenerateCover(title, author, category, bookId, bookFileUrl) {
 
 /**
  * Extract a cover from a book's uploaded file
- * Priority: Local PDF first page → Open Library → Placeholder
+ * Priority: PDF/EPUB first page → Open Library → Placeholder
  * @param {object} book - Book object with file_url, title, author, category, id
  * @returns {string|null} Cover URL or null
  */
@@ -381,29 +372,17 @@ async function extractCoverFromBook(book) {
   console.log(`🔍 extractCoverFromBook: "${title}" by ${author}`);
   console.log(`📁 file_url: ${file_url || '(none)'}`);
 
-  // Priority 1: Extract first page from local PDF
-  if (file_url && !file_url.startsWith('http') && generateCoverFromPDF) {
+  // Priority 1: Extract first page/cover from the actual book file (local or remote)
+  if (file_url && generateCoverFromFile) {
     try {
-      const ext = path.extname(file_url.split('?')[0]).toLowerCase();
-      if (ext === '.pdf') {
-        // file_url is like '/uploads/file.pdf' — file is in server/uploads/
-        const absPath = path.join(__dirname, file_url.replace(/^\/+/, ''));
-        if (fs.existsSync(absPath)) {
-          console.log('📄 Extracting first page from PDF:', absPath);
-          const coverPath = await generateCoverFromPDF(absPath);
-          if (coverPath) {
-            console.log('🖼️ Cover from PDF first page:', coverPath);
-            return coverPath;
-          }
-        } else {
-          console.log('⚠️ PDF file not found on disk:', absPath);
-        }
+      const fileCover = await generateCoverFromFile(file_url);
+      if (fileCover) {
+        console.log('🖼️ Cover from book file:', fileCover);
+        return fileCover;
       }
     } catch (err) {
-      console.error('⚠️ PDF extraction error:', err.message);
+      console.error('⚠️ File extraction error:', err.message);
     }
-  } else if (file_url && file_url.startsWith('http')) {
-    console.log('ℹ️ File is external URL, skipping PDF extraction');
   }
 
   // Priority 2: Open Library
@@ -420,8 +399,8 @@ async function extractCoverFromBook(book) {
   // Priority 3: Placeholder SVG
   try {
     const placeholder = savePlaceholderCover(title, author, category, id);
-      console.log('🎨 Placeholder cover:', placeholder);
-      return placeholder;
+    console.log('🎨 Placeholder cover:', placeholder);
+    return placeholder;
   } catch (err) {
     console.error('❌ Placeholder error:', err.message);
   }

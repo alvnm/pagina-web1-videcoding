@@ -9,7 +9,6 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const Store = require('../db');
-const { generateCoverFromPDF } = require('../cover-generator');
 const coverService = require('../cover-service');
 
 // Helper: proxy a remote URL and pipe to response
@@ -474,48 +473,18 @@ router.post('/', requireAuth, (req, res, next) => {
       bookCoverUrl = '/uploads/' + coverFile.filename;
     }
 
-    // If no cover provided, try auto-generation
-    // Priority: PDF first page → Open Library → Placeholder
+    // If no cover provided, auto-generate from the book file
+    // Priority: PDF/EPUB first page → Open Library → Placeholder SVG
     if (!bookCoverUrl) {
-      // 1. Extract first page from local PDF (best quality, actual document cover)
-      if (bookFileUrl && !bookFileUrl.startsWith('http')) {
-        try {
-          // file_url is like '/uploads/file.pdf' — file is in server/uploads/
-          const filePath = path.join(__dirname, '..', bookFileUrl.replace(/^\/+/, ''));
-          if (fs.existsSync(filePath)) {
-            const ext = path.extname(filePath).toLowerCase();
-            if (ext === '.pdf') {
-              console.log('📄 Extracting cover from PDF first page for:', title);
-              const coverPath = await generateCoverFromPDF(filePath);
-              if (coverPath) {
-                bookCoverUrl = coverPath;
-                console.log('🖼️ Cover extracted from PDF first page for:', title);
-              }
-            }
-          }
-        } catch (coverErr) {
-          console.error('⚠️ Could not extract cover from PDF:', coverErr.message);
+      try {
+        const autoCover = await coverService.autoGenerateCover(
+          title.trim(), author.trim(), category, 'pending', bookFileUrl
+        );
+        if (autoCover) {
+          bookCoverUrl = autoCover;
         }
-      }
-
-      // 2. Try Open Library API (fast, no system deps)
-      if (!bookCoverUrl) {
-        try {
-          const olCover = await coverService.searchOpenLibraryCover(title, author);
-          if (olCover) {
-            bookCoverUrl = olCover;
-            console.log('📚 Cover from Open Library for:', title);
-          }
-        } catch (olErr) {
-          console.error('⚠️ Open Library cover search failed:', olErr.message);
-        }
-      }
-
-      // 3. Final fallback: generate a placeholder SVG
-      if (!bookCoverUrl) {
-        const placeholder = coverService.savePlaceholderCover(title, author, category, 'pending');
-        bookCoverUrl = placeholder;
-        console.log('🎨 Placeholder cover for:', title);
+      } catch (coverErr) {
+        console.error('⚠️ Auto-cover generation failed:', coverErr.message);
       }
     }
 
