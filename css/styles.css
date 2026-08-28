@@ -3018,7 +3018,8 @@ body.dark-mode .doc-viewer-header {
 /* Book card cover image */
 .book-card-cover-img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
@@ -3029,6 +3030,7 @@ body.dark-mode .doc-viewer-header {
 
 .book-card-cover--full {
   position: relative;
+  aspect-ratio: 3 / 4;
   border-radius: 12px;
   overflow: hidden;
 }
