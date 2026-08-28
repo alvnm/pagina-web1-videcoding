@@ -97,7 +97,9 @@ router.get('/:id/favorites', async (req, res) => {
     const user = await Store.findUserById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
 
+    console.log(`📚 Fetching favorites for user ${user.id}`);
     const favorites = await Store.favoritesByUser(user.id);
+    console.log(`📚 Found ${favorites.length} favorites for user ${user.id}`);
     res.json({ favorites });
   } catch (err) {
     console.error('❌ Favorites error:', err.message);

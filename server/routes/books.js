@@ -158,9 +158,14 @@ router.post('/auto-cover', requireAuth, async (req, res) => {
         if (book) booksToProcess.push(book);
       }
     } else {
-      // Process all books without cover
+      // Process all books without cover or with placeholder covers
       const allBooks = await Store.allBooks();
-      booksToProcess = allBooks.filter(b => !b.cover_url || b.cover_url === '');
+      booksToProcess = allBooks.filter(b => {
+        if (!b.cover_url || b.cover_url === '') return true;
+        // Also regenerate placeholder covers that failed
+        if (b.cover_url.includes('cover-placeholder-') || b.cover_url.includes('data:image/svg+xml')) return true;
+        return false;
+      });
     }
 
     let generated = 0;
@@ -473,10 +478,11 @@ router.post('/', requireAuth, (req, res, next) => {
       bookCoverUrl = '/uploads/' + coverFile.filename;
     }
 
-    // If no cover provided, use placeholder immediately (non-blocking)
+    // If no cover provided, save a temporary placeholder (non-blocking)
     // Real cover will be generated in background after response
     let needsAutoCover = false;
     if (!bookCoverUrl) {
+      // Use a temp placeholder with 'pending' - will be replaced after book creation
       bookCoverUrl = coverService.savePlaceholderCover(
         title.trim(), author.trim(), category, 'pending'
       );
@@ -504,17 +510,21 @@ router.post('/', requireAuth, (req, res, next) => {
     res.status(201).json({ book });
 
     // Generate real cover in background (non-blocking)
-    if (needsAutoCover && bookFileUrl) {
-      coverService.autoGenerateCover(
-        title.trim(), author.trim(), category, book.id, bookFileUrl
-      ).then(async (realCover) => {
-        if (realCover && realCover !== bookCoverUrl) {
-          await Store.updateBookCover(book.id, realCover);
-          console.log(`🖼️ Background cover generated for "${title}":`, realCover);
+    if (needsAutoCover) {
+      const generateWithRetry = async () => {
+        try {
+          const realCover = await coverService.autoGenerateCover(
+            title.trim(), author.trim(), category, book.id, bookFileUrl, 3
+          );
+          if (realCover && realCover !== bookCoverUrl) {
+            await Store.updateBookCover(book.id, realCover);
+            console.log(`🖼️ Background cover generated for "${title}":`, realCover);
+          }
+        } catch (err) {
+          console.error(`⚠️ Background cover generation failed for "${title}":`, err.message);
         }
-      }).catch((err) => {
-        console.error('⚠️ Background cover generation failed:', err.message);
-      });
+      };
+      generateWithRetry();
     }
   } catch (err) {
     console.error('❌ book create error:', err.message);
@@ -586,8 +596,11 @@ router.post('/:id/favorite', requireAuth, async (req, res) => {
     const book = await Store.bookById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Documento no encontrado.' });
 
+    console.log(`❤️ Toggle favorite: user=${req.session.user.id}, book=${req.params.id}`);
     const added = await Store.toggleFavorite(req.session.user.id, req.params.id);
+    console.log(`❤️ Favorite result: added=${added}`);
     const count = await Store.favoriteCount(req.params.id);
+    console.log(`❤️ Favorite count for book ${req.params.id}: ${count}`);
     res.json({ ok: true, isFavorite: added, count });
   } catch (err) {
     console.error('❌ favorite error:', err.message);

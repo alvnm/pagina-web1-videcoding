@@ -6,6 +6,7 @@
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
+const SupabaseSessionStore = require('./session-store');
 
 // Initialize database (JSON file + seed data)
 require('./db');
@@ -20,18 +21,31 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session
+// Session — use Supabase-backed store for persistence across serverless instances
+const sessionStore = new SupabaseSessionStore({
+  table: 'sessions',
+  ttl: 7 * 24 * 60 * 60, // 7 days in seconds
+});
+
 app.use(session({
   name: 'bcv.sid',
   secret: process.env.SESSION_SECRET || 'biblioteca-comunitaria-secret-2026',
   resave: false,
   saveUninitialized: false,
+  store: sessionStore,
   cookie: {
     httpOnly: true,
+    secure: true,              // Vercel serves over HTTPS
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     sameSite: 'lax',
+    path: '/',
   },
 }));
+
+// Clean up expired sessions periodically (every hour)
+setInterval(() => {
+  sessionStore.cleanup().catch(() => {});
+}, 60 * 60 * 1000);
 
 // ---- Health check (must be before catch-all) ----
 app.get('/api/health', (req, res) => {

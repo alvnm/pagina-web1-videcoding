@@ -331,18 +331,30 @@ const Store = {
   // ===================== Favorites =====================
 
   async toggleFavorite(userId, bookId) {
-    const { data: existing } = await supabase
+    console.log(`❤️ DB toggleFavorite: user=${userId}, book=${bookId}`);
+    const { data: existing, error: selErr } = await supabase
       .from('favorites')
       .select('*')
       .eq('user_id', userId)
       .eq('book_id', bookId)
       .limit(1);
 
+    if (selErr) console.error('❌ toggleFavorite select error:', selErr.message);
+    console.log(`❤️ Existing favorites: ${existing ? existing.length : 0}`);
+
     if (existing && existing.length > 0) {
-      await supabase.from('favorites').delete().eq('user_id', userId).eq('book_id', bookId);
+      const { error: delErr } = await supabase.from('favorites').delete().eq('user_id', userId).eq('book_id', bookId);
+      if (delErr) console.error('❌ toggleFavorite delete error:', delErr.message);
+      else console.log('❤️ Removed from favorites');
       return false; // removed
     } else {
-      await supabase.from('favorites').insert({ user_id: userId, book_id: bookId, created_at: new Date().toISOString() });
+      const { error: insErr } = await supabase.from('favorites').insert({ user_id: userId, book_id: bookId, created_at: new Date().toISOString() });
+      if (insErr) {
+        console.error('❌ toggleFavorite insert error:', insErr.message);
+        console.error('❌ Full error:', JSON.stringify(insErr));
+        throw new Error('No se pudo guardar el favorito: ' + insErr.message);
+      }
+      console.log('❤️ Added to favorites');
       return true; // added
     }
   },
@@ -358,10 +370,16 @@ const Store = {
   },
 
   async favoritesByUser(userId) {
-    const { data: favRows } = await supabase.from('favorites').select('book_id').eq('user_id', userId);
+    console.log(`📚 DB favoritesByUser: user=${userId}`);
+    const { data: favRows, error: favErr } = await supabase.from('favorites').select('book_id').eq('user_id', userId);
+    if (favErr) console.error('❌ favoritesByUser select error:', favErr.message);
+    console.log(`📚 Raw favorite rows: ${favRows ? favRows.length : 0}`);
     if (!favRows || favRows.length === 0) return [];
     const bookIds = favRows.map(f => f.book_id);
-    const { data: books } = await supabase.from('books').select('*').in('id', bookIds);
+    console.log(`📚 Book IDs from favorites:`, bookIds);
+    const { data: books, error: bookErr } = await supabase.from('books').select('*').in('id', bookIds);
+    if (bookErr) console.error('❌ favoritesByUser books error:', bookErr.message);
+    console.log(`📚 Books found: ${books ? books.length : 0}`);
     return this._enrichBooks(books || []);
   },
 

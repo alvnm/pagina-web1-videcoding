@@ -6,6 +6,7 @@ const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 const path = require('path');
+const SupabaseSessionStore = require('./session-store');
 
 // Initialize database (JSON file + seed data)
 require('./db');
@@ -20,13 +21,19 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session
+// Session — use Supabase-backed store for persistence
 const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const sessionStore = new SupabaseSessionStore({
+  table: 'sessions',
+  ttl: 7 * 24 * 60 * 60, // 7 days in seconds
+});
+
 app.use(session({
   name: 'bcv.sid',
   secret: process.env.SESSION_SECRET || 'biblioteca-comunitaria-secret-2026',
   resave: false,
   saveUninitialized: false,
+  store: sessionStore,
   cookie: {
     httpOnly: true,
     secure: isProd,
