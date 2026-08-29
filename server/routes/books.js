@@ -479,10 +479,10 @@ router.post('/', requireAuth, (req, res, next) => {
     }
 
     // If no cover provided, save a temporary placeholder (non-blocking)
-    // Real cover will be generated in background after response
+    // Real cover will be the first page of the uploaded document (extracted in background)
     let needsAutoCover = false;
-    if (!bookCoverUrl) {
-      // Use a temp placeholder with 'pending' - will be replaced after book creation
+    if (!bookCoverUrl && bookFileUrl) {
+      // Use a temp placeholder with 'pending' - will be replaced with first page of document after book creation
       bookCoverUrl = coverService.savePlaceholderCover(
         title.trim(), author.trim(), category, 'pending'
       );

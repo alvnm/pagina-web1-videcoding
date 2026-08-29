@@ -37,15 +37,24 @@ app.use(session({
     httpOnly: true,
     secure: true,              // Vercel serves over HTTPS
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    sameSite: 'lax',
+    sameSite: 'lax',           // 'lax' is safer than 'none' — still works for same-site navigations
     path: '/',
   },
 }));
 
-// Clean up expired sessions periodically (every hour)
-setInterval(() => {
-  sessionStore.cleanup().catch(() => {});
-}, 60 * 60 * 1000);
+// For serverless: clean up expired sessions on a percentage of requests
+// (setInterval doesn't work because instances are destroyed after each request)
+let _lastCleanup = 0;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // every hour
+
+app.use((req, res, next) => {
+  const now = Date.now();
+  if (now - _lastCleanup > CLEANUP_INTERVAL_MS) {
+    _lastCleanup = now;
+    sessionStore.cleanup().catch(() => {});
+  }
+  next();
+});
 
 // ---- Health check (must be before catch-all) ----
 app.get('/api/health', (req, res) => {

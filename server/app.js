@@ -38,10 +38,15 @@ app.use(session({
     httpOnly: true,
     secure: isProd,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    sameSite: isProd ? 'none' : 'lax',
+    sameSite: 'lax',
     path: '/',
   },
 }));
+
+// Clean up expired sessions periodically (every hour)
+setInterval(() => {
+  sessionStore.cleanup().catch(() => {});
+}, 60 * 60 * 1000);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

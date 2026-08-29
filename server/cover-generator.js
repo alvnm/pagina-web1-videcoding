@@ -90,10 +90,17 @@ async function _uploadCover(buffer, filename) {
  * @param {string} url - Remote URL
  * @returns {object} { tempPath, cleanup }
  */
-function _downloadTempFile(url) {
+function _downloadTempFile(url, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) {
+      return reject(new Error('Too many redirects'));
+    }
     const proto = url.startsWith('https') ? https : http;
-    const tempPath = path.join(UPLOAD_DIR, `_temp_${Date.now()}_${Math.round(Math.random() * 1e6)}.pdf`);
+    // Detect file extension from URL path (default to .pdf)
+    const urlPath = url.split('?')[0];
+    const urlExt = path.extname(urlPath).toLowerCase();
+    const ext = ['.pdf', '.epub'].includes(urlExt) ? urlExt : '.pdf';
+    const tempPath = path.join(UPLOAD_DIR, `_temp_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`);
 
     // Ensure uploads dir exists
     if (!fs.existsSync(UPLOAD_DIR)) {
@@ -101,32 +108,44 @@ function _downloadTempFile(url) {
     }
 
     const file = fs.createWriteStream(tempPath);
+    const timer = setTimeout(() => {
+      file.close();
+      try { fs.unlinkSync(tempPath); } catch {}
+      reject(new Error('Download timeout'));
+    }, 60000); // 60s timeout
 
     proto.get(url, { headers: { 'User-Agent': 'BibliotecaComunitaria/1.0' } }, (res) => {
       // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        clearTimeout(timer);
         file.close();
         try { fs.unlinkSync(tempPath); } catch {}
-        return _downloadTempFile(res.headers.location).then(resolve, reject);
+        return _downloadTempFile(res.headers.location, maxRedirects - 1).then(resolve, reject);
       }
       if (res.statusCode !== 200) {
+        clearTimeout(timer);
         file.close();
         try { fs.unlinkSync(tempPath); } catch {}
         return reject(new Error(`HTTP ${res.statusCode}`));
       }
       res.pipe(file);
       file.on('finish', () => {
+        clearTimeout(timer);
         file.close();
+        const stats = fs.statSync(tempPath);
+        console.log(`📥 Downloaded ${(stats.size / 1024).toFixed(1)} KB to ${tempPath}`);
         resolve({
           tempPath,
           cleanup: () => { try { fs.unlinkSync(tempPath); } catch {} }
         });
       });
       file.on('error', (err) => {
+        clearTimeout(timer);
         try { fs.unlinkSync(tempPath); } catch {}
         reject(err);
       });
     }).on('error', (err) => {
+      clearTimeout(timer);
       file.close();
       try { fs.unlinkSync(tempPath); } catch {}
       reject(err);

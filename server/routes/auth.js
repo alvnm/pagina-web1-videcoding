@@ -87,7 +87,7 @@ router.post('/logout', (req, res) => {
   const cookieOpts = {
     path: '/',
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL,
   };
   req.session.destroy((err) => {

@@ -37,7 +37,7 @@ class SupabaseSessionStore extends Store {
   get(sid, callback) {
     supabase
       .from(this.table)
-      .select('sess')
+      .select('sess, expires')
       .eq('sid', sid)
       .single()
       .then(({ data, error }) => {
@@ -47,19 +47,26 @@ class SupabaseSessionStore extends Store {
 
         const sess = data.sess;
 
-        // Check if session has expired
-        if (sess && sess.cookie && sess.cookie.expires) {
-          if (new Date(sess.cookie.expires) < new Date()) {
-            // Session expired, destroy it
-            this.destroy(sid, () => callback(null, null));
-            return;
-          }
+        // Check if session has expired using both cookie.expires and the DB expires column
+        const expiredByCookie = sess && sess.cookie && sess.cookie.expires
+          ? new Date(sess.cookie.expires) < new Date()
+          : false;
+        const expiredByDb = data.expires
+          ? new Date(data.expires) < new Date()
+          : false;
+
+        if (expiredByCookie || expiredByDb) {
+          // Session expired, destroy it
+          this.destroy(sid, () => callback(null, null));
+          return;
         }
 
         callback(null, sess);
       })
       .catch((err) => {
         console.error('❌ Session get error:', err.message);
+        // On network/timeout errors, return null to allow graceful degradation
+        // The user may need to re-authenticate, but we won't crash
         callback(null, null);
       });
   }
@@ -117,8 +124,9 @@ class SupabaseSessionStore extends Store {
   }
 
   /**
-   * Touch a session (update expiry without changing data)
-   * This prevents idle sessions from being destroyed
+   * Touch a session (update expiry and data without re-reading)
+   * This prevents idle sessions from being destroyed and ensures
+   * any in-memory session changes are persisted to Supabase.
    */
   touch(sid, sess, callback) {
     const expires = sess.cookie && sess.cookie.expires
@@ -127,7 +135,11 @@ class SupabaseSessionStore extends Store {
 
     supabase
       .from(this.table)
-      .update({ expires, updated_at: new Date().toISOString() })
+      .update({
+        expires,
+        sess,
+        updated_at: new Date().toISOString(),
+      })
       .eq('sid', sid)
       .then(({ error }) => {
         if (error) {

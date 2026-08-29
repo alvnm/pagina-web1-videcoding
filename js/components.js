@@ -699,23 +699,23 @@ const Components = (() => {
             <div id="file-preview"></div>
           </div>
           <div class="form-group">
-            <label class="form-label">Imagen de Portada</label>
+            <label class="form-label">Portada</label>
+            <div class="auto-cover-hint" style="margin-bottom:0.75rem;padding:0.75rem;background:var(--color-surface-alt);border-radius:var(--radius-sm);border:1px solid var(--color-border);">
+              <p style="font-size:0.85rem;color:var(--color-text-secondary);margin:0;">💡 La portada se generará automáticamente usando la <strong>primera página del documento</strong>. Si subes un PDF o EPUB, se extraerá la primera página como portada.</p>
+            </div>
             <div class="cover-upload-zone" id="cover-drop-zone" onclick="document.getElementById('cover-input').click()">
               <div class="cover-upload-icon">🖼️</div>
-              <p class="cover-upload-text">Selecciona una imagen para la portada</p>
+              <p class="cover-upload-text">Opcionalmente, sube una imagen personalizada para la portada</p>
               <p class="cover-upload-formats">Formatos: JPG, PNG, WebP (máx. 5 MB)</p>
             </div>
             <input type="file" id="cover-input" accept=".jpg,.jpeg,.png,.webp,.gif" style="display:none" />
             <div id="cover-preview"></div>
             <div class="cover-suggestion-section">
               <button type="button" class="btn btn-secondary btn-sm" id="search-cover-btn" onclick="App.searchCoverSuggestions()" style="margin-top:0.5rem;">
-                🔍 Buscar portada automáticamente
+                🔍 Buscar portada en Open Library
               </button>
-              <p class="form-hint">Busca la portada en Open Library según título y autor</p>
+              <p class="form-hint">Busca portadas alternativas por título y autor</p>
               <div id="cover-suggestions" class="cover-suggestions-grid"></div>
-            </div>
-            <div class="auto-cover-hint" style="margin-top:0.5rem;padding:0.75rem;background:var(--color-surface-alt);border-radius:var(--radius-sm);border:1px dashed var(--color-border);">
-              <p style="font-size:0.85rem;color:var(--color-text-secondary);margin:0;">💡 <strong>Sin portada:</strong> Se generará automáticamente una portada con el título y autor del libro.</p>
             </div>
           </div>
           <div class="form-group">
