@@ -114,6 +114,10 @@ const coverUpload = multer({
 // ---- Auth middleware ----
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.user) {
+    console.error('❌ requireAuth: No session found');
+    console.error('   req.session:', req.session ? 'exists' : 'null');
+    console.error('   cookies:', req.headers.cookie ? req.headers.cookie.substring(0, 50) + '...' : 'none');
+    console.error('   cookie header present:', !!req.headers.cookie);
     return res.status(401).json({ error: 'Debes iniciar sesión.' });
   }
   next();

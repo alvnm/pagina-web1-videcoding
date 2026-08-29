@@ -109,4 +109,22 @@ router.get('/me', (req, res) => {
   res.json({ user: req.session.user });
 });
 
+// GET /api/auth/debug — check session store health (dev only)
+router.get('/debug', async (req, res) => {
+  const supabase = require('../supabase');
+  const result = { sessionsTable: false, sessionExists: false, cookiePresent: !!req.headers.cookie };
+  try {
+    const { error } = await supabase.from('sessions').select('sid').limit(1);
+    result.sessionsTable = !error;
+    result.tableError = error ? error.message : null;
+  } catch (err) {
+    result.tableError = err.message;
+  }
+  if (req.session && req.session.user) {
+    result.sessionExists = true;
+    result.userId = req.session.user.id;
+  }
+  res.json(result);
+});
+
 module.exports = router;
