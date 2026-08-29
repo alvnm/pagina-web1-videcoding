@@ -164,8 +164,13 @@ async function _extractPDFFirstPage(pdfPath) {
   }
 
   try {
+    // Import @napi-rs/canvas FIRST to polyfill DOMMatrix for pdfjs-dist
+    const canvasModule = await import('@napi-rs/canvas');
+    if (typeof globalThis.DOMMatrix === 'undefined') {
+      globalThis.DOMMatrix = canvasModule.DOMMatrix;
+    }
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const { createCanvas } = await import('@napi-rs/canvas');
+    const { createCanvas } = canvasModule;
 
     const data = new Uint8Array(fs.readFileSync(pdfPath));
     const doc = await pdfjsLib.getDocument({ data }).promise;
@@ -224,8 +229,13 @@ async function extractPDFFirstPageFromBuffer(buffer) {
   if (!buffer || buffer.length < 100) return null;
 
   try {
+    // Import @napi-rs/canvas FIRST to polyfill DOMMatrix for pdfjs-dist
+    const canvasModule = await import('@napi-rs/canvas');
+    if (typeof globalThis.DOMMatrix === 'undefined') {
+      globalThis.DOMMatrix = canvasModule.DOMMatrix;
+    }
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const { createCanvas } = await import('@napi-rs/canvas');
+    const { createCanvas } = canvasModule;
 
     const data = new Uint8Array(buffer);
     const doc = await pdfjsLib.getDocument({ data }).promise;
