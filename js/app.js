@@ -938,11 +938,16 @@ const App = (() => {
     }
   }
 
-  async function filterByCategory(category) {
-    _currentCategory = _currentCategory === category ? '' : category;
+  function filterByCategory(category) {
+    const newCat = _currentCategory === category ? '' : category;
+    _currentCategory = newCat;
     _currentQuery = '';
     _currentPage = 1;
-    await _homePage();
+    if (newCat) {
+      Router.navigate('/?category=' + encodeURIComponent(newCat));
+    } else {
+      Router.navigate('/');
+    }
   }
 
   function goToPage(page) {
@@ -1332,11 +1337,14 @@ const App = (() => {
 
   // ---- Recently Added Section ----
   async function _homePage() {
-    // Check if category is in query string (from categories page)
+    // Check if category is in query string (from categories page or filter chips)
     const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
     const catFromUrl = urlParams.get('category');
-    if (catFromUrl && !_currentCategory) {
+    if (catFromUrl) {
       _currentCategory = catFromUrl;
+    } else if (!window.location.hash.includes('?')) {
+      // Navigated to home without query — clear category
+      _currentCategory = '';
     }
 
     // Fetch stats for hero (only on initial catalog view)
