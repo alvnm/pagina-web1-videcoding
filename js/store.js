@@ -384,8 +384,12 @@ const Store = (() => {
       });
 
     if (error) {
-      console.error('❌ Supabase upload error:', error.message);
-      throw new Error('Error al subir archivo: ' + error.message);
+      console.error('❌ Supabase upload error:', error.message, error);
+      let detail = error.message || 'Error desconocido';
+      if (error.statusCode === 413 || detail.includes('maximum')) {
+        detail += '\n💡 Ejecuta el SQL de actualización del bucket en Supabase Dashboard → SQL Editor.';
+      }
+      throw new Error(detail);
     }
 
     const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
