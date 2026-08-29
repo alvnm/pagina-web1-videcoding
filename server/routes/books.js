@@ -123,6 +123,9 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// ---- Supabase upload (server-side, uses service key) ----
+const supabase = require('../supabase');
+
 // ---- Routes (specific routes FIRST, then parameterized) ----
 
 // GET /api/books/auto-cover-search — search covers from Open Library (must be before /:id)
@@ -375,10 +378,9 @@ router.get('/:id', async (req, res) => {
 
 // PUT /api/books/:id (update book — owner only)
 router.put('/:id', requireAuth, (req, res, next) => {
-  // Try multer for multipart (local dev), skip for JSON (Vercel)
   if (req.is('multipart/form-data')) {
     coverUpload.single('cover_image')(req, res, (err) => {
-      if (err) return next(err);
+      if (err) return handleMulterError(err, req, res, () => {});
       next();
     });
   } else {
@@ -441,16 +443,68 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Multer error handler — preserve session on upload errors
+function handleMulterError(err, req, res, next) {
+  if (err instanceof multer.MulterError) {
+    console.error('❌ Multer error:', err.code, err.message);
+    let msg = 'Error al subir el archivo.';
+    if (err.code === 'LIMIT_FILE_SIZE') msg = 'El archivo excede el límite de 50 MB.';
+    else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'Campo de archivo inesperado.';
+    return res.status(400).json({ error: msg });
+  }
+  if (err && err.message && err.message.includes('Formato')) {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
+}
+
+// POST /api/books/upload — server-side file upload to Supabase Storage
+router.post('/upload', requireAuth, upload.single('file'), handleMulterError, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
+    }
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const filePath = `libros/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileBuffer = fs.readFileSync(req.file.path);
+
+    const { data, error } = await supabase.storage
+      .from('documentos')
+      .upload(filePath, fileBuffer, {
+        contentType: req.file.mimetype || 'application/octet-stream',
+        upsert: false,
+      });
+
+    // Clean up temp file
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+
+    if (error) {
+      console.error('❌ Supabase Storage upload error:', error.message);
+      return res.status(500).json({ error: 'Error al subir el archivo: ' + error.message });
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(filePath);
+
+    res.json({ file_url: urlData.publicUrl });
+  } catch (err) {
+    console.error('❌ Upload error:', err.message);
+    // Clean up temp file on error
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch { /* ignore */ } }
+    res.status(500).json({ error: 'Error al subir el archivo.' });
+  }
+});
+
 // POST /api/books
 router.post('/', requireAuth, (req, res, next) => {
-  // Try multer for multipart (local dev), skip for JSON (Vercel)
   if (req.is('multipart/form-data')) {
-    // Use multer fields to handle both file and cover_image
     upload.fields([
       { name: 'file', maxCount: 1 },
       { name: 'cover_image', maxCount: 1 }
     ])(req, res, (err) => {
-      if (err) return next(err);
+      if (err) return handleMulterError(err, req, res, () => {});
       next();
     });
   } else {

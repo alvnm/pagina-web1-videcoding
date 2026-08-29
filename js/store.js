@@ -362,16 +362,16 @@ const Store = (() => {
 
   // ---- Supabase Storage ----
   async function uploadBookFile(file) {
-    const filePath = `libros/${Date.now()}_${file.name}`;
-    const { data, error } = await supabase.storage
-      .from('documentos')
-      .upload(filePath, file);
-    if (error) throw error;
-
-    const { data: publicUrlData } = supabase.storage
-      .from('documentos')
-      .getPublicUrl(filePath);
-    return publicUrlData.publicUrl;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await _fetchWithTimeout(API + '/books/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    const data = await _parseResponse(res);
+    if (!res.ok) throw new Error(data.error || 'Error al subir archivo');
+    return data.file_url;
   }
 
   return {
