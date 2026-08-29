@@ -74,8 +74,9 @@ function sanitizeFilename(name) {
 const router = Router();
 
 // ---- Multer config ----
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const IS_VERCEL = !!process.env.VERCEL;
+const UPLOAD_DIR = IS_VERCEL ? '/tmp' : path.join(__dirname, '..', 'uploads');
+try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 
 const ALLOWED_EXTS = ['.pdf', '.epub', '.mobi', '.doc', '.docx'];
 const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];

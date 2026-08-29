@@ -11,7 +11,9 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+// On Vercel, use /tmp (the only writable directory in serverless)
+const IS_VERCEL = !!process.env.VERCEL;
+const UPLOAD_DIR = IS_VERCEL ? '/tmp' : path.join(__dirname, 'uploads');
 
 // Supabase client (lazy init)
 let _supabase = null;
@@ -25,9 +27,6 @@ function _getSupabase() {
   }
   return _supabase;
 }
-
-// Is running on Vercel serverless?
-const IS_VERCEL = !!process.env.VERCEL;
 
 /**
  * Upload a buffer to Supabase Storage and return the public URL

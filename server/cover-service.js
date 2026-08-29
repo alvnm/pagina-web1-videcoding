@@ -17,7 +17,8 @@ try {
   console.log('⚠️ cover-generator not available for file extraction');
 }
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const IS_VERCEL = !!process.env.VERCEL;
+const UPLOAD_DIR = IS_VERCEL ? '/tmp' : path.join(__dirname, 'uploads');
 try {
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 } catch (e) {
