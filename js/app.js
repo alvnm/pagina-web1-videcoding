@@ -732,6 +732,36 @@ const App = (() => {
     Router.navigate('/');
   }
 
+  // Extract first page of a PDF as an image using PDF.js in the browser
+  async function _extractCoverFromPDF(file) {
+    if (!window.pdfjsLib) return '';
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      // Convert canvas to blob
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.9));
+      if (!blob || blob.size < 100) return '';
+
+      // Upload to Supabase Storage
+      const filename = `cover-pdf-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
+      const url = await Store.uploadCoverBlob(blob, filename);
+      console.log('✅ PDF cover extracted in browser:', url);
+      return url;
+    } catch (err) {
+      console.error('⚠️ PDF cover extraction failed:', err.message);
+      return '';
+    }
+  }
+
   async function handleUpload(e) {
     e.preventDefault();
     const title = document.getElementById('book-title').value.trim();
@@ -746,21 +776,31 @@ const App = (() => {
 
     // Step 1: Upload file to Supabase Storage (if file selected)
     let fileUrl = '';
-    let extractedCoverUrl = '';
     const fileInput = document.getElementById('file-input');
     if (fileInput.files.length > 0) {
       try {
         Components.showToast('📤 Subiendo archivo...', 'info');
         const uploadResult = await Store.uploadBookFile(fileInput.files[0]);
         fileUrl = uploadResult.file_url || '';
-        extractedCoverUrl = uploadResult.cover_url || '';
-        if (extractedCoverUrl) {
-          Components.showToast('🖼️ Portada extraída del documento ✅', 'success');
-        }
       } catch (uploadErr) {
         console.error('File upload error:', uploadErr);
         Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');
         return;
+      }
+    }
+
+    // Step 1b: Extract cover from PDF using PDF.js in the browser
+    let extractedCoverUrl = '';
+    const selectedFile = fileInput.files[0];
+    if (selectedFile && selectedFile.type === 'application/pdf' && window.pdfjsLib) {
+      try {
+        Components.showToast('🖼️ Extrayendo portada del PDF...', 'info');
+        extractedCoverUrl = await _extractCoverFromPDF(selectedFile);
+        if (extractedCoverUrl) {
+          Components.showToast('🖼️ Portada extraída del PDF ✅', 'success');
+        }
+      } catch (pdfErr) {
+        console.error('PDF cover extraction error:', pdfErr);
       }
     }
 
@@ -775,16 +815,13 @@ const App = (() => {
       } catch (coverErr) {
         console.error('Cover upload error:', coverErr);
         Components.showToast('Error al subir la portada: ' + (coverErr.message || coverErr.error?.message || 'Error desconocido'), 'error');
-        // Continue without cover - not critical
       }
     }
 
-    // Step 2b: Use extracted cover from PDF/EPUB if no manual cover was uploaded
+    // Priority: manual cover > extracted PDF cover > Open Library > server fallback
     if (!coverUrl && extractedCoverUrl) {
       coverUrl = extractedCoverUrl;
     }
-
-    // Step 2c: Use selected cover from Open Library if no cover yet
     if (!coverUrl && _selectedCoverUrl) {
       coverUrl = _selectedCoverUrl;
       Components.showToast('🖼️ Usando portada de Open Library', 'info');

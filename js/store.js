@@ -374,6 +374,21 @@ const Store = (() => {
     return { file_url: data.file_url, cover_url: data.cover_url || '' };
   }
 
+  // Upload an image blob (e.g. extracted PDF cover) directly to Supabase Storage
+  async function uploadCoverBlob(blob, filename) {
+    const filePath = `portadas/${filename}`;
+    const { error } = await supabase
+      .storage
+      .from('documentos')
+      .upload(filePath, blob, {
+        contentType: 'image/png',
+        upsert: true,
+      });
+    if (error) throw new Error('Error al subir portada: ' + error.message);
+    const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
+    return urlData.publicUrl;
+  }
+
   return {
     registerUser,
     loginUser,
@@ -418,5 +433,6 @@ const Store = (() => {
     supabaseLogout,
     supabaseGetUser,
     uploadBookFile,
+    uploadCoverBlob,
   };
 })();
