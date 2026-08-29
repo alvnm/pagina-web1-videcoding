@@ -781,22 +781,32 @@ const App = (() => {
       const file = fileInput.files[0];
       const useProgress = file.size > 5 * 1024 * 1024; // Show progress bar for files > 5 MB
       let progressToast = null;
+      let progressTimer = null;
       try {
         if (useProgress) {
           const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
           progressToast = Components.showProgressToast(`📤 Subiendo ${sizeMB} MB...`);
+          // Simulated progress: accelerates quickly then slows down (max ~90%)
+          let pct = 0;
+          const startTime = Date.now();
+          progressTimer = setInterval(() => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            // Logarithmic curve: fast start, slows down approaching 90%
+            pct = Math.min(90, 90 * (1 - Math.exp(-elapsed / 8)));
+            Components.updateProgressToast(progressToast, pct);
+          }, 400);
         } else {
           Components.showToast('📤 Subiendo archivo...', 'info');
         }
-        const uploadResult = await Store.uploadBookFile(file, (event) => {
-          if (useProgress && event.loaded != null && event.total != null) {
-            const pct = (event.loaded / event.total) * 100;
-            Components.updateProgressToast(progressToast, pct);
-          }
-        });
-        if (progressToast) Components.removeProgressToast(progressToast);
+        const uploadResult = await Store.uploadBookFile(file);
+        if (progressTimer) clearInterval(progressTimer);
+        if (progressToast) {
+          Components.updateProgressToast(progressToast, 100);
+          setTimeout(() => Components.removeProgressToast(progressToast), 500);
+        }
         fileUrl = uploadResult.file_url || '';
       } catch (uploadErr) {
+        if (progressTimer) clearInterval(progressTimer);
         if (progressToast) Components.removeProgressToast(progressToast);
         console.error('File upload error:', uploadErr);
         Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');

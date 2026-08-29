@@ -368,7 +368,7 @@ const Store = (() => {
   }
 
   // ---- Supabase Storage ----
-  async function uploadBookFile(file, onUploadProgress) {
+  async function uploadBookFile(file) {
     // Upload directly from browser to Supabase Storage (avoids Vercel serverless timeout)
     const ext = file.name.split('.').pop();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -381,7 +381,6 @@ const Store = (() => {
       .upload(filePath, file, {
         contentType: file.type || 'application/octet-stream',
         upsert: false,
-        ...(onUploadProgress ? { onUploadProgress } : {}),
       });
 
     if (error) {
