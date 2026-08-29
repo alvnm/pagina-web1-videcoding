@@ -484,7 +484,24 @@ function handleMulterError(err, req, res, next) {
 }
 
 // POST /api/books/upload — server-side file upload to Supabase Storage
-router.post('/upload', requireAuth, upload.single('file'), handleMulterError, async (req, res) => {
+router.post('/upload', requireAuth, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error on upload:', err.code, err.message);
+      if (err instanceof multer.MulterError) {
+        let msg = 'Error al subir el archivo.';
+        if (err.code === 'LIMIT_FILE_SIZE') msg = 'El archivo excede el límite de 50 MB.';
+        else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'Campo de archivo inesperado.';
+        return res.status(400).json({ error: msg });
+      }
+      if (err.message && err.message.includes('Formato')) {
+        return res.status(400).json({ error: err.message });
+      }
+      return res.status(400).json({ error: 'Error al procesar el archivo: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -492,6 +509,8 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
 
     const ext = path.extname(req.file.originalname).toLowerCase();
     const filePath = `libros/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+
+    console.log(`📎 Upload attempt: ${req.file.originalname} (${ext}), ${(req.file.buffer.length / 1024).toFixed(0)} KB`);
 
     const { data, error } = await supabase.storage
       .from('documentos')
@@ -509,54 +528,65 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
       .from('documentos')
       .getPublicUrl(filePath);
 
-    // Try to get a cover: 1) Extract from PDF/EPUB 2) Open Library 3) Placeholder
-    let coverUrl = '';
-    console.log(`📎 File ext: ${ext}, buffer: ${(req.file.buffer.length / 1024).toFixed(0)} KB`);
+    console.log('✅ File uploaded to Supabase:', urlData.publicUrl);
 
-    // Try extraction from PDF/EPUB
-    if (coverGenerator && ['.pdf', '.epub'].includes(ext)) {
-      try {
-        console.log(`🖼️ Extracting cover from ${ext}...`);
-        let imageBuffer = null;
-        if (ext === '.pdf') {
-          imageBuffer = await coverGenerator.extractPDFFirstPageFromBuffer(req.file.buffer);
-        } else if (ext === '.epub') {
-          imageBuffer = await coverGenerator.extractEPUBCoverFromBuffer(req.file.buffer);
-        }
-        if (imageBuffer && imageBuffer.length > 100) {
-          const coverFilename = `cover-${ext.replace('.', '')}-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
-          coverUrl = await coverGenerator._uploadCover(imageBuffer, coverFilename);
-          console.log('✅ Cover from file extraction:', coverUrl);
-        } else {
-          console.log('⚠️ File extraction returned no image, trying Open Library...');
-        }
-      } catch (coverErr) {
-        console.error('⚠️ File extraction failed:', coverErr.message);
-      }
-    }
+    // Respond IMMEDIATELY with file_url — cover extraction runs in background
+    // This prevents Vercel timeout (10-30s) from killing the request
+    res.json({ file_url: urlData.publicUrl, cover_url: '' });
 
-    // Fallback: search Open Library for cover
-    if (!coverUrl) {
+    // ---- Background: try to extract cover (non-blocking) ----
+    (async () => {
       try {
-        const coverService = require('../cover-service');
-        const { title, author } = req.body;
-        if (title) {
-          console.log('📚 Searching Open Library for cover...');
-          const olCover = await coverService.searchOpenLibraryCover(title.trim(), (author || '').trim());
-          if (olCover) {
-            coverUrl = olCover;
-            console.log('✅ Cover from Open Library:', coverUrl);
+        // Try extraction from PDF/EPUB
+        if (coverGenerator && ['.pdf', '.epub'].includes(ext)) {
+          try {
+            console.log(`🖼️ [bg] Extracting cover from ${ext}...`);
+            let imageBuffer = null;
+            if (ext === '.pdf') {
+              imageBuffer = await coverGenerator.extractPDFFirstPageFromBuffer(req.file.buffer);
+            } else if (ext === '.epub') {
+              imageBuffer = await coverGenerator.extractEPUBCoverFromBuffer(req.file.buffer);
+            }
+            if (imageBuffer && imageBuffer.length > 100) {
+              const coverFilename = `cover-${ext.replace('.', '')}-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
+              const coverUrl = await coverGenerator._uploadCover(imageBuffer, coverFilename);
+              console.log('✅ [bg] Cover from file extraction:', coverUrl);
+              return; // success, no need for fallback
+            } else {
+              console.log('⚠️ [bg] File extraction returned no image');
+            }
+          } catch (coverErr) {
+            console.error('⚠️ [bg] File extraction failed:', coverErr.message);
           }
         }
-      } catch (olErr) {
-        console.error('⚠️ Open Library search failed:', olErr.message);
-      }
-    }
 
-    res.json({ file_url: urlData.publicUrl, cover_url: coverUrl });
+        // Fallback: search Open Library for cover
+        try {
+          const coverSvc = require('../cover-service');
+          const { title, author } = req.body;
+          if (title) {
+            console.log('📚 [bg] Searching Open Library for cover...');
+            const olCover = await coverSvc.searchOpenLibraryCover(title.trim(), (author || '').trim());
+            if (olCover) {
+              console.log('✅ [bg] Cover from Open Library:', olCover);
+            }
+          }
+        } catch (olErr) {
+          console.error('⚠️ [bg] Open Library search failed:', olErr.message);
+        }
+      } catch (bgErr) {
+        console.error('❌ [bg] Cover extraction error:', bgErr.message);
+      }
+    })();
+
+    // Note: client already handles cover_url = '' gracefully
   } catch (err) {
     console.error('❌ Upload error:', err.message);
-    res.status(500).json({ error: 'Error al subir el archivo.' });
+    console.error('❌ Upload error stack:', err.stack);
+    // Ensure JSON is always returned, even for unexpected errors
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Error al subir el archivo.' });
+    }
   }
 });
 

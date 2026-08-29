@@ -12,12 +12,15 @@ const Store = (() => {
   const supabase = supabaseClient; // acceso interno al cliente Supabase
 
   // ---- Generic fetch helper ----
-  const FETCH_TIMEOUT = 15000; // 15 seconds
+  const FETCH_TIMEOUT = 15000; // 15 seconds (default)
+  const UPLOAD_TIMEOUT = 60000; // 60 seconds for file uploads
 
   function _fetchWithTimeout(url, options = {}) {
+    const timeout = options._timeout || FETCH_TIMEOUT;
+    const { _timeout, ...fetchOpts } = options; // strip custom key before passing to fetch
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    return fetch(url, { ...fetchOpts, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
   }
 
   async function _parseResponse(res) {
@@ -25,7 +28,11 @@ const Store = (() => {
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error('Error del servidor: respuesta no válida.');
+      const snippet = text ? text.substring(0, 200) : '(empty)';
+      console.error('Server non-JSON response:', res.status, snippet);
+      throw new Error(
+        `Error del servidor (HTTP ${res.status}): respuesta no válida — ${snippet}`
+      );
     }
   }
 
@@ -362,16 +369,62 @@ const Store = (() => {
 
   // ---- Supabase Storage ----
   async function uploadBookFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await _fetchWithTimeout(API + '/books/upload', {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
+    // Upload directly from browser to Supabase Storage (avoids Vercel serverless timeout)
+    const ext = file.name.split('.').pop();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `libros/${Date.now()}_${safeName}`;
+    console.log('📤 Uploading directly to Supabase:', filePath, `(${(file.size / 1024).toFixed(0)} KB)`);
+
+    const { error } = await supabase
+      .storage
+      .from('documentos')
+      .upload(filePath, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('❌ Supabase upload error:', error.message);
+      throw new Error('Error al subir archivo: ' + error.message);
+    }
+
+    const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
+    console.log('✅ File uploaded:', urlData.publicUrl);
+
+    // Try to extract cover from PDF/EPUB in the browser
+    let coverUrl = '';
+    if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+      try {
+        coverUrl = await _extractPDFFirstPage(file);
+      } catch (e) { console.warn('⚠️ PDF cover extraction failed:', e.message); }
+    }
+
+    return { file_url: urlData.publicUrl, cover_url: coverUrl };
+  }
+
+  // Extract first page of a PDF as a PNG blob (browser-side)
+  async function _extractPDFFirstPage(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+    const scale = 1.5;
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(async (blob) => {
+        if (!blob) return reject(new Error('Canvas toBlob failed'));
+        try {
+          const coverFilename = `cover-pdf-${Date.now()}.png`;
+          const coverUrl = await uploadCoverBlob(blob, coverFilename);
+          resolve(coverUrl);
+        } catch (e) { reject(e); }
+      }, 'image/png');
     });
-    const data = await _parseResponse(res);
-    if (!res.ok) throw new Error(data.error || 'Error al subir archivo');
-    return { file_url: data.file_url, cover_url: data.cover_url || '' };
   }
 
   // Upload an image blob (e.g. extracted PDF cover) directly to Supabase Storage

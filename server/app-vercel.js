@@ -77,6 +77,12 @@ app.all('/api/*', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err.message || err);
 
+  // Prevent sending headers twice if response already started
+  if (res.headersSent) {
+    console.error('⚠️ Headers already sent, ending response');
+    return res.end();
+  }
+
   // Multer errors
   if (err instanceof multer.MulterError) {
     let msg = 'Error al subir el archivo.';

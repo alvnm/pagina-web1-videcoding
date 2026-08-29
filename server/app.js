@@ -76,6 +76,12 @@ app.use((err, req, res, next) => {
   console.error('❌ Full stack:', err.stack || 'no stack');
   console.error('❌ Error code:', err.code || 'no code');
 
+  // Prevent sending headers twice if response already started
+  if (res.headersSent) {
+    console.error('⚠️ Headers already sent, ending response');
+    return res.end();
+  }
+
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'El archivo excede el límite de 50 MB.' });
