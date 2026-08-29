@@ -301,9 +301,16 @@ function _escapeXml(str) {
 function savePlaceholderCover(title, author, category, bookId) {
   const svg = generatePlaceholderSVG(title, author, category, bookId);
 
-  // Try to save to disk
+  // On Vercel, /tmp is not served by Express — always use data URI
+  if (IS_VERCEL) {
+    const encoded = Buffer.from(svg, 'utf8').toString('base64');
+    const dataUri = `data:image/svg+xml;base64,${encoded}`;
+    console.log('✅ Using data URI for placeholder (Vercel)');
+    return dataUri;
+  }
+
+  // Local dev: save to disk so it can be served by Express static
   try {
-    // Ensure upload dir exists
     if (!fs.existsSync(UPLOAD_DIR)) {
       fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     }
@@ -314,11 +321,8 @@ function savePlaceholderCover(title, author, category, bookId) {
     return `/uploads/${filename}`;
   } catch (fileErr) {
     console.error('⚠️ Could not save SVG to disk:', fileErr.message);
-    // Fallback: return a data URI so the browser can display it
     const encoded = Buffer.from(svg, 'utf8').toString('base64');
-    const dataUri = `data:image/svg+xml;base64,${encoded}`;
-    console.log('✅ Using data URI fallback for placeholder');
-    return dataUri;
+    return `data:image/svg+xml;base64,${encoded}`;
   }
 }
 
@@ -329,6 +333,12 @@ function savePlaceholderCover(title, author, category, bookId) {
  * @returns {string|null} Local path or null on failure
  */
 async function downloadCoverLocally(url, prefix) {
+  // On Vercel, don't download to disk — just return the remote URL
+  if (IS_VERCEL) {
+    console.log('✅ Using remote cover URL directly (Vercel):', url);
+    return url;
+  }
+
   try {
     const buffer = await _fetchBuffer(url);
     if (!buffer || buffer.length < 500) return null;
