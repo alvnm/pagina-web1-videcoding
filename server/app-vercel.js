@@ -86,12 +86,12 @@ app.use((err, req, res, next) => {
   // Multer errors
   if (err instanceof multer.MulterError) {
     let msg = 'Error al subir el archivo.';
-    if (err.code === 'LIMIT_FILE_SIZE') msg = 'El archivo excede el límite de 50 MB.';
+    if (err.code === 'LIMIT_FILE_SIZE') msg = 'El archivo excede el límite de 200 MB.';
     else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'Campo de archivo inesperado.';
     return res.status(400).json({ error: msg });
   }
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'El archivo excede el límite de 50 MB.' });
+    return res.status(413).json({ error: 'El archivo excede el límite de 200 MB.' });
   }
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({ error: 'Campo de archivo inesperado.' });

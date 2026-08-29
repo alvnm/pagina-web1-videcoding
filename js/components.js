@@ -131,6 +131,46 @@ const Components = (() => {
     }, 3000);
   }
 
+  // ---- Progress Toast (for large file uploads) ----
+  function showProgressToast(message) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-progress';
+    toast.innerHTML = `
+      <div class="toast-progress-text">${message}</div>
+      <div class="toast-progress-bar-wrapper">
+        <div class="toast-progress-bar" style="width: 0%"></div>
+      </div>
+      <div class="toast-progress-percent">0%</div>
+    `;
+    container.appendChild(toast);
+    return toast;
+  }
+
+  function updateProgressToast(toast, percent, message) {
+    if (!toast) return;
+    const bar = toast.querySelector('.toast-progress-bar');
+    const pctEl = toast.querySelector('.toast-progress-percent');
+    const textEl = toast.querySelector('.toast-progress-text');
+    if (bar) bar.style.width = percent + '%';
+    if (pctEl) pctEl.textContent = Math.round(percent) + '%';
+    if (message && textEl) textEl.textContent = message;
+  }
+
+  function removeProgressToast(toast) {
+    if (!toast) return;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100px)';
+    toast.style.transition = '0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }
+
   // ---- Skeleton Components ----
   function renderSkeletonBooks(count = 6) {
     return Array.from({ length: count }, () => `
@@ -693,7 +733,7 @@ const Components = (() => {
             <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
               <div class="drop-zone-icon">📁</div>
               <p class="drop-zone-text">Arrastra tu archivo aquí o <strong>haz clic para seleccionar</strong></p>
-              <p class="drop-zone-formats">Formatos aceptados: PDF, EPUB, MOBI, DOC, DOCX (máx. 50 MB)</p>
+              <p class="drop-zone-formats">Formatos aceptados: PDF, EPUB, MOBI, DOC, DOCX (máx. 200 MB)</p>
             </div>
             <input type="file" id="file-input" accept=".pdf,.epub,.mobi,.doc,.docx" style="display:none" />
             <div id="file-preview"></div>
@@ -1591,6 +1631,9 @@ const Components = (() => {
     getCategoryIcon,
     getInitials,
     showToast,
+    showProgressToast,
+    updateProgressToast,
+    removeProgressToast,
     renderNavbar,
     renderHero,
     renderBookCard,

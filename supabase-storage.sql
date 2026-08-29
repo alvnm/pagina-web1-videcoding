@@ -3,13 +3,13 @@
 -- Ejecutar en: Supabase Dashboard → SQL Editor → Run
 -- ============================================
 
--- 1. Crear el bucket como público (50 MB, PDF/EPUB/imágenes)
+-- 1. Crear el bucket como público (200 MB, PDF/EPUB/imágenes)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'documentos',
   'documentos',
   true,
-  52428800,
+  209715200,
   ARRAY['application/pdf', 'application/epub+zip', 'image/jpeg', 'image/png']
 )
 ON CONFLICT (id) DO NOTHING;

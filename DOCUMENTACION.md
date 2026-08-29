@@ -273,7 +273,7 @@ author: string (requerido)
 category: string (requerido)
 description: string (requerido)
 tags: string (JSON array, ej: '["tag1","tag2"]')
-file: File (PDF, EPUB, MOBI, DOC, DOCX — máx 50MB)
+file: File (PDF, EPUB, MOBI, DOC, DOCX — máx 200MB)
 ```
 
 **PUT /books/:id (JSON):**

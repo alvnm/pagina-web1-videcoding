@@ -778,11 +778,26 @@ const App = (() => {
     let fileUrl = '';
     const fileInput = document.getElementById('file-input');
     if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      const useProgress = file.size > 5 * 1024 * 1024; // Show progress bar for files > 5 MB
+      let progressToast = null;
       try {
-        Components.showToast('📤 Subiendo archivo...', 'info');
-        const uploadResult = await Store.uploadBookFile(fileInput.files[0]);
+        if (useProgress) {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          progressToast = Components.showProgressToast(`📤 Subiendo ${sizeMB} MB...`);
+        } else {
+          Components.showToast('📤 Subiendo archivo...', 'info');
+        }
+        const uploadResult = await Store.uploadBookFile(file, (event) => {
+          if (useProgress && event.loaded != null && event.total != null) {
+            const pct = (event.loaded / event.total) * 100;
+            Components.updateProgressToast(progressToast, pct);
+          }
+        });
+        if (progressToast) Components.removeProgressToast(progressToast);
         fileUrl = uploadResult.file_url || '';
       } catch (uploadErr) {
+        if (progressToast) Components.removeProgressToast(progressToast);
         console.error('File upload error:', uploadErr);
         Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');
         return;

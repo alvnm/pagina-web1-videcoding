@@ -13,7 +13,7 @@ const Store = (() => {
 
   // ---- Generic fetch helper ----
   const FETCH_TIMEOUT = 15000; // 15 seconds (default)
-  const UPLOAD_TIMEOUT = 60000; // 60 seconds for file uploads
+  const UPLOAD_TIMEOUT = 300000; // 5 minutes for large file uploads (up to 200 MB)
 
   function _fetchWithTimeout(url, options = {}) {
     const timeout = options._timeout || FETCH_TIMEOUT;
@@ -368,7 +368,7 @@ const Store = (() => {
   }
 
   // ---- Supabase Storage ----
-  async function uploadBookFile(file) {
+  async function uploadBookFile(file, onUploadProgress) {
     // Upload directly from browser to Supabase Storage (avoids Vercel serverless timeout)
     const ext = file.name.split('.').pop();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -381,6 +381,7 @@ const Store = (() => {
       .upload(filePath, file, {
         contentType: file.type || 'application/octet-stream',
         upsert: false,
+        ...(onUploadProgress ? { onUploadProgress } : {}),
       });
 
     if (error) {

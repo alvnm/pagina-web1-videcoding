@@ -1057,6 +1057,43 @@ select {
   background: var(--color-error);
 }
 
+.toast-progress {
+  background: var(--color-text);
+  min-width: 300px;
+  max-width: 400px;
+  padding: 0.85rem 1.25rem;
+}
+
+.toast-progress-text {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-progress-bar-wrapper {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.35rem;
+}
+
+.toast-progress-bar {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.toast-progress-percent {
+  font-size: 0.75rem;
+  text-align: right;
+  opacity: 0.8;
+}
+
 @keyframes slideInRight {
   from {
     opacity: 0;
