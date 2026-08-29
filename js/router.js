@@ -23,14 +23,21 @@ const Router = (() => {
     return hash;
   }
 
+  // Strip query string from path for route matching
+  function _pathOnly(fullPath) {
+    return fullPath.split('?')[0];
+  }
+
   function _matchRoute(path) {
+    const pathClean = _pathOnly(path);
+
     // Exact match first
-    if (routes[path]) return { handler: routes[path], params: {} };
+    if (routes[pathClean]) return { handler: routes[pathClean], params: {} };
 
     // Parameterized routes: /book/:id, /profile/:id
     for (const route in routes) {
       const routeParts = route.split('/');
-      const pathParts = path.split('/');
+      const pathParts = pathClean.split('/');
 
       if (routeParts.length !== pathParts.length) continue;
 
