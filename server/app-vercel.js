@@ -6,6 +6,7 @@
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
+const multer = require('multer');
 const SupabaseSessionStore = require('./session-store');
 
 // Initialize database (JSON file + seed data)
@@ -35,9 +36,9 @@ app.use(session({
   store: sessionStore,
   cookie: {
     httpOnly: true,
-    secure: true,              // Vercel serves over HTTPS
+    secure: false,             // Allow both HTTP and HTTPS; Vercel proxies handle HTTPS
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    sameSite: 'lax',           // 'lax' is safer than 'none' — still works for same-site navigations
+    sameSite: 'lax',
     path: '/',
   },
 }));
@@ -77,6 +78,12 @@ app.use((err, req, res, next) => {
   console.error('❌ Server error:', err.message || err);
 
   // Multer errors
+  if (err instanceof multer.MulterError) {
+    let msg = 'Error al subir el archivo.';
+    if (err.code === 'LIMIT_FILE_SIZE') msg = 'El archivo excede el límite de 50 MB.';
+    else if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = 'Campo de archivo inesperado.';
+    return res.status(400).json({ error: msg });
+  }
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'El archivo excede el límite de 50 MB.' });
   }

@@ -80,13 +80,7 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const ALLOWED_EXTS = ['.pdf', '.epub', '.mobi', '.doc', '.docx'];
 const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
-    cb(null, unique + path.extname(file.originalname).toLowerCase());
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -101,9 +95,9 @@ const upload = multer({
   },
 });
 
-// Multer for cover image uploads
+// Multer for cover image uploads (memory storage for serverless)
 const coverUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB for cover images
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -114,6 +108,8 @@ const coverUpload = multer({
     }
   },
 });
+
+
 
 // ---- Auth middleware ----
 function requireAuth(req, res, next) {
@@ -393,11 +389,27 @@ router.put('/:id', requireAuth, (req, res, next) => {
 
     const { title, author, category, description, tags, cover_url } = req.body;
 
-    // Handle cover image update
+    // Handle cover image update — upload to Supabase Storage if a file was provided
     let bookCoverUrl = cover_url;
     const coverFile = req.file;
     if (coverFile) {
-      bookCoverUrl = '/uploads/' + coverFile.filename;
+      try {
+        const coverPath = `covers/${Date.now()}_${coverFile.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('documentos')
+          .upload(coverPath, coverFile.buffer, {
+            contentType: coverFile.mimetype || 'image/jpeg',
+            upsert: false,
+          });
+        if (uploadErr) {
+          console.error('❌ Cover upload error:', uploadErr.message);
+        } else {
+          const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(coverPath);
+          bookCoverUrl = urlData.publicUrl;
+        }
+      } catch (coverErr) {
+        console.error('❌ Cover upload exception:', coverErr.message);
+      }
     }
 
     const result = await Store.updateBook(req.params.id, req.session.user.id, {
@@ -467,17 +479,13 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
 
     const ext = path.extname(req.file.originalname).toLowerCase();
     const filePath = `libros/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const fileBuffer = fs.readFileSync(req.file.path);
 
     const { data, error } = await supabase.storage
       .from('documentos')
-      .upload(filePath, fileBuffer, {
+      .upload(filePath, req.file.buffer, {
         contentType: req.file.mimetype || 'application/octet-stream',
         upsert: false,
       });
-
-    // Clean up temp file
-    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
 
     if (error) {
       console.error('❌ Supabase Storage upload error:', error.message);
@@ -491,8 +499,6 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
     res.json({ file_url: urlData.publicUrl });
   } catch (err) {
     console.error('❌ Upload error:', err.message);
-    // Clean up temp file on error
-    if (req.file) { try { fs.unlinkSync(req.file.path); } catch { /* ignore */ } }
     res.status(500).json({ error: 'Error al subir el archivo.' });
   }
 });
@@ -522,14 +528,45 @@ router.post('/', requireAuth, (req, res, next) => {
     const file = req.files && req.files.file ? req.files.file[0] : req.file;
     let bookFileUrl = file_url || '';
     if (file) {
-      bookFileUrl = '/uploads/' + file.filename;
+      // Upload to Supabase Storage using buffer (memory storage)
+      try {
+        const filePath = `libros/${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('documentos')
+          .upload(filePath, file.buffer, {
+            contentType: file.mimetype || 'application/octet-stream',
+            upsert: false,
+          });
+        if (!uploadErr) {
+          const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
+          bookFileUrl = urlData.publicUrl;
+        } else {
+          console.error('❌ File upload to Supabase error:', uploadErr.message);
+        }
+      } catch (upErr) {
+        console.error('❌ File upload exception:', upErr.message);
+      }
     }
 
-    // Handle cover image
+    // Handle cover image — upload to Supabase Storage using buffer
     const coverFile = req.files && req.files.cover_image ? req.files.cover_image[0] : null;
     let bookCoverUrl = cover_url || '';
     if (coverFile) {
-      bookCoverUrl = '/uploads/' + coverFile.filename;
+      try {
+        const coverPath = `covers/${Date.now()}_${coverFile.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: coverErr } = await supabase.storage
+          .from('documentos')
+          .upload(coverPath, coverFile.buffer, {
+            contentType: coverFile.mimetype || 'image/jpeg',
+            upsert: false,
+          });
+        if (!coverErr) {
+          const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(coverPath);
+          bookCoverUrl = urlData.publicUrl;
+        }
+      } catch (coverUpErr) {
+        console.error('❌ Cover upload exception:', coverUpErr.message);
+      }
     }
 
     // If no cover provided, save a temporary placeholder (non-blocking)

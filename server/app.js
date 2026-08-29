@@ -36,7 +36,7 @@ app.use(session({
   store: sessionStore,
   cookie: {
     httpOnly: true,
-    secure: isProd,
+    secure: false, // Allow HTTP for local dev; production proxies handle HTTPS
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     sameSite: 'lax',
     path: '/',
