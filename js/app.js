@@ -746,11 +746,17 @@ const App = (() => {
 
     // Step 1: Upload file to Supabase Storage (if file selected)
     let fileUrl = '';
+    let extractedCoverUrl = '';
     const fileInput = document.getElementById('file-input');
     if (fileInput.files.length > 0) {
       try {
         Components.showToast('📤 Subiendo archivo...', 'info');
-        fileUrl = await Store.uploadBookFile(fileInput.files[0]);
+        const uploadResult = await Store.uploadBookFile(fileInput.files[0]);
+        fileUrl = uploadResult.file_url || '';
+        extractedCoverUrl = uploadResult.cover_url || '';
+        if (extractedCoverUrl) {
+          Components.showToast('🖼️ Portada extraída del documento ✅', 'success');
+        }
       } catch (uploadErr) {
         console.error('File upload error:', uploadErr);
         Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');
@@ -764,7 +770,8 @@ const App = (() => {
     if (coverInput && coverInput.files.length > 0) {
       try {
         Components.showToast('🖼️ Subiendo portada...', 'info');
-        coverUrl = await Store.uploadBookFile(coverInput.files[0]);
+        const coverResult = await Store.uploadBookFile(coverInput.files[0]);
+        coverUrl = coverResult.file_url || '';
       } catch (coverErr) {
         console.error('Cover upload error:', coverErr);
         Components.showToast('Error al subir la portada: ' + (coverErr.message || coverErr.error?.message || 'Error desconocido'), 'error');
@@ -772,14 +779,19 @@ const App = (() => {
       }
     }
 
-    // Step 2b: Use selected cover from Open Library if no file cover was uploaded
+    // Step 2b: Use extracted cover from PDF/EPUB if no manual cover was uploaded
+    if (!coverUrl && extractedCoverUrl) {
+      coverUrl = extractedCoverUrl;
+    }
+
+    // Step 2c: Use selected cover from Open Library if no cover yet
     if (!coverUrl && _selectedCoverUrl) {
       coverUrl = _selectedCoverUrl;
       Components.showToast('🖼️ Usando portada de Open Library', 'info');
     }
 
     // Step 3: Create book record with file URL and cover URL
-    // If no cover at all, the server will auto-generate (Open Library → PDF → Placeholder)
+    // If no cover at all, the server will auto-generate (Open Library → Placeholder)
     try {
       Components.showToast('📚 Guardando documento...', 'info');
       const { book } = await Store.addBookJSON({
@@ -1258,7 +1270,8 @@ const App = (() => {
     if (coverInput && coverInput.files.length > 0) {
       try {
         Components.showToast('🖼️ Subiendo nueva portada...', 'info');
-        coverUrl = await Store.uploadBookFile(coverInput.files[0]);
+        const result = await Store.uploadBookFile(coverInput.files[0]);
+        coverUrl = result.file_url || result.cover_url || undefined;
       } catch (coverErr) {
         console.error('Cover upload error:', coverErr);
         Components.showToast('Error al subir la portada: ' + (coverErr.message || coverErr.error?.message || 'Error desconocido'), 'error');

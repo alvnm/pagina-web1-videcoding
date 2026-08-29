@@ -127,6 +127,14 @@ function requireAuth(req, res, next) {
 // ---- Supabase upload (server-side, uses service key) ----
 const supabase = require('../supabase');
 
+// Cover extraction from buffer (for upload-time extraction)
+let coverGenerator;
+try {
+  coverGenerator = require('../cover-generator');
+} catch (e) {
+  console.log('⚠️ cover-generator not available for upload-time extraction');
+}
+
 // ---- Routes (specific routes FIRST, then parameterized) ----
 
 // GET /api/books/auto-cover-search — search covers from Open Library (must be before /:id)
@@ -501,7 +509,28 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
       .from('documentos')
       .getPublicUrl(filePath);
 
-    res.json({ file_url: urlData.publicUrl });
+    // Try to extract cover from PDF/EPUB while buffer is in memory
+    let coverUrl = '';
+    if (coverGenerator && ['.pdf', '.epub'].includes(ext)) {
+      try {
+        console.log(`🖼️ Extracting cover from ${ext} buffer...`);
+        let imageBuffer = null;
+        if (ext === '.pdf') {
+          imageBuffer = await coverGenerator.extractPDFFirstPageFromBuffer(req.file.buffer);
+        } else if (ext === '.epub') {
+          imageBuffer = await coverGenerator.extractEPUBCoverFromBuffer(req.file.buffer);
+        }
+        if (imageBuffer) {
+          const coverFilename = `cover-${ext.replace('.', '')}-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
+          coverUrl = await coverGenerator._uploadCover(imageBuffer, coverFilename);
+          console.log('✅ Cover extracted during upload:', coverUrl);
+        }
+      } catch (coverErr) {
+        console.error('⚠️ Cover extraction during upload failed:', coverErr.message);
+      }
+    }
+
+    res.json({ file_url: urlData.publicUrl, cover_url: coverUrl });
   } catch (err) {
     console.error('❌ Upload error:', err.message);
     res.status(500).json({ error: 'Error al subir el archivo.' });

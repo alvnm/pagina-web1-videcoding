@@ -216,6 +216,52 @@ async function _extractPDFFirstPage(pdfPath) {
 }
 
 /**
+ * Extract the first page of a PDF from an in-memory buffer
+ * @param {Buffer} buffer - PDF file buffer
+ * @returns {Buffer|null} - PNG image buffer, or null if failed
+ */
+async function extractPDFFirstPageFromBuffer(buffer) {
+  if (!buffer || buffer.length < 100) return null;
+
+  try {
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const { createCanvas } = await import('@napi-rs/canvas');
+
+    const data = new Uint8Array(buffer);
+    const doc = await pdfjsLib.getDocument({ data }).promise;
+
+    if (!doc || doc.numPages === 0) return null;
+
+    const page = await doc.getPage(1);
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    const maxWidth = 800;
+    const scale = Math.min(maxWidth / unscaledViewport.width, 2.0);
+    const viewport = page.getViewport({ scale });
+
+    const padX = Math.round(viewport.width * 0.05);
+    const padTop = Math.round(viewport.height * 0.08);
+    const padBottom = Math.round(viewport.height * 0.08);
+    const canvasW = viewport.width + padX * 2;
+    const canvasH = viewport.height + padTop + padBottom;
+
+    const canvas = createCanvas(canvasW, canvasH);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    await page.render({ canvasContext: ctx, viewport, transform: [1, 0, 0, 1, padX, padTop] }).promise;
+
+    const pngBuffer = canvas.toBuffer('image/png');
+    if (!pngBuffer || pngBuffer.length < 100) return null;
+
+    console.log(`✅ PDF cover extracted from buffer: ${(pngBuffer.length / 1024).toFixed(1)} KB`);
+    return pngBuffer;
+  } catch (err) {
+    console.error('⚠️ Error extracting PDF from buffer:', err.message);
+    return null;
+  }
+}
+
+/**
  * Extract cover image from an EPUB file
  * @param {string} epubPath - Absolute path to the EPUB file
  * @returns {Buffer|null} - Image buffer, or null
@@ -307,6 +353,76 @@ async function _extractEPUBCover(epubPath) {
 }
 
 /**
+ * Extract cover image from an EPUB buffer (in-memory)
+ * @param {Buffer} buffer - EPUB file buffer
+ * @returns {Buffer|null} - Image buffer, or null
+ */
+async function extractEPUBCoverFromBuffer(buffer) {
+  if (!buffer || buffer.length < 100) return null;
+
+  try {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(buffer);
+    const entries = zip.getEntries();
+
+    const coverPatterns = [
+      /cover\.(jpg|jpeg|png|gif|webp)/i,
+      /OEBPS\/images?\/cover/i,
+      /OEBPS\/cover/i,
+      /images\/cover/i,
+    ];
+
+    let coverEntry = null;
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+      for (const pattern of coverPatterns) {
+        if (pattern.test(entry.entryName)) { coverEntry = entry; break; }
+      }
+      if (coverEntry) break;
+    }
+
+    if (!coverEntry) {
+      const opfEntry = entries.find(e => /content\.opf$/i.test(e.entryName));
+      if (opfEntry) {
+        const opfContent = opfEntry.getData().toString('utf8');
+        if (opfContent.match(/cover-image/i)) {
+          const itemMatch = opfContent.match(/<item[^>]+href="([^"]+)"[^>]+(?:id="cover-image"|properties="cover-image")/i)
+            || opfContent.match(/<item[^>]+(?:id="cover-image"|properties="cover-image")[^>]+href="([^"]+)"/i);
+          if (itemMatch && itemMatch[1]) {
+            const coverHref = itemMatch[1];
+            const dirPath = path.dirname(opfEntry.entryName);
+            const fullCoverPath = dirPath === '.' ? coverHref : dirPath + '/' + coverHref;
+            coverEntry = entries.find(e => e.entryName === fullCoverPath || e.entryName.endsWith('/' + coverHref));
+          }
+        }
+      }
+    }
+
+    if (!coverEntry) {
+      const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      let maxSize = 0;
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        const ext = path.extname(entry.entryName).toLowerCase();
+        if (imageExts.includes(ext) && entry.header.size > maxSize) {
+          maxSize = entry.header.size;
+          coverEntry = entry;
+        }
+      }
+    }
+
+    if (!coverEntry) return null;
+    const imageBuffer = coverEntry.getData();
+    if (!imageBuffer || imageBuffer.length < 500) return null;
+    console.log(`✅ EPUB cover from buffer: ${(imageBuffer.length / 1024).toFixed(1)} KB`);
+    return imageBuffer;
+  } catch (err) {
+    console.error('⚠️ Error extracting EPUB cover from buffer:', err.message);
+    return null;
+  }
+}
+
+/**
  * Generate cover from a book file (local or remote)
  * Extracts first page/cover → uploads to Supabase Storage → returns public URL
  * @param {string} fileUrl - Local path (e.g. '/uploads/file.pdf') or remote URL (https://...)
@@ -381,4 +497,4 @@ async function generateCoverFromPDF(pdfPath) {
   return await _uploadCover(buffer, filename);
 }
 
-module.exports = { generateCoverFromPDF, generateCoverFromFile };
+module.exports = { generateCoverFromPDF, generateCoverFromFile, extractPDFFirstPageFromBuffer, extractEPUBCoverFromBuffer, _uploadCover };

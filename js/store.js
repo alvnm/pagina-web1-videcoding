@@ -371,7 +371,7 @@ const Store = (() => {
     });
     const data = await _parseResponse(res);
     if (!res.ok) throw new Error(data.error || 'Error al subir archivo');
-    return data.file_url;
+    return { file_url: data.file_url, cover_url: data.cover_url || '' };
   }
 
   return {
