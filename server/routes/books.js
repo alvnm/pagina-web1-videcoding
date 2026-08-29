@@ -509,24 +509,47 @@ router.post('/upload', requireAuth, upload.single('file'), handleMulterError, as
       .from('documentos')
       .getPublicUrl(filePath);
 
-    // Try to extract cover from PDF/EPUB while buffer is in memory
+    // Try to get a cover: 1) Extract from PDF/EPUB 2) Open Library 3) Placeholder
     let coverUrl = '';
+    console.log(`📎 File ext: ${ext}, buffer: ${(req.file.buffer.length / 1024).toFixed(0)} KB`);
+
+    // Try extraction from PDF/EPUB
     if (coverGenerator && ['.pdf', '.epub'].includes(ext)) {
       try {
-        console.log(`🖼️ Extracting cover from ${ext} buffer...`);
+        console.log(`🖼️ Extracting cover from ${ext}...`);
         let imageBuffer = null;
         if (ext === '.pdf') {
           imageBuffer = await coverGenerator.extractPDFFirstPageFromBuffer(req.file.buffer);
         } else if (ext === '.epub') {
           imageBuffer = await coverGenerator.extractEPUBCoverFromBuffer(req.file.buffer);
         }
-        if (imageBuffer) {
+        if (imageBuffer && imageBuffer.length > 100) {
           const coverFilename = `cover-${ext.replace('.', '')}-${Date.now()}-${Math.round(Math.random() * 1e4)}.png`;
           coverUrl = await coverGenerator._uploadCover(imageBuffer, coverFilename);
-          console.log('✅ Cover extracted during upload:', coverUrl);
+          console.log('✅ Cover from file extraction:', coverUrl);
+        } else {
+          console.log('⚠️ File extraction returned no image, trying Open Library...');
         }
       } catch (coverErr) {
-        console.error('⚠️ Cover extraction during upload failed:', coverErr.message);
+        console.error('⚠️ File extraction failed:', coverErr.message);
+      }
+    }
+
+    // Fallback: search Open Library for cover
+    if (!coverUrl) {
+      try {
+        const coverService = require('../cover-service');
+        const { title, author } = req.body;
+        if (title) {
+          console.log('📚 Searching Open Library for cover...');
+          const olCover = await coverService.searchOpenLibraryCover(title.trim(), (author || '').trim());
+          if (olCover) {
+            coverUrl = olCover;
+            console.log('✅ Cover from Open Library:', coverUrl);
+          }
+        }
+      } catch (olErr) {
+        console.error('⚠️ Open Library search failed:', olErr.message);
       }
     }
 
