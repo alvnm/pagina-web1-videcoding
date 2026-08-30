@@ -3328,3 +3328,53 @@ body.dark-mode .cover-suggestion-item:hover {
 body.dark-mode .cover-suggestion-item.selected {
   border-color: var(--color-accent);
 }
+
+/* ============================================
+   Mobile Auth Form Fixes
+   ============================================ */
+@media (max-width: 400px) {
+  .auth-page {
+    min-height: auto;
+    padding: 1rem 0.75rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem 1rem;
+    border-radius: var(--radius-md);
+  }
+
+  .auth-card h2 {
+    font-size: 1.3rem;
+  }
+
+  .auth-card .auth-subtitle {
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-input {
+    padding: 0.6rem 0.75rem;
+    font-size: 16px; /* Prevent iOS zoom */
+  }
+
+  .btn-lg {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+  }
+
+  .password-requirements {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .auth-switch {
+    font-size: 0.82rem;
+    margin-top: 1rem;
+  }
+}
