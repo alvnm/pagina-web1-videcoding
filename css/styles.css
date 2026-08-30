@@ -1135,6 +1135,11 @@ select {
   margin-bottom: 1rem;
 }
 
+/* --- Navbar Auth (mobile menu) --- */
+.navbar-nav-auth {
+  display: none;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .mobile-toggle {
@@ -1902,11 +1907,6 @@ select {
   justify-content: center;
   gap: 0.4rem;
   padding: 1rem 0;
-}
-
-/* --- Navbar Auth (mobile menu) --- */
-.navbar-nav-auth {
-  display: none;
 }
 
 /* --- Navbar Quick Search --- */
