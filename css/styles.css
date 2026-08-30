@@ -348,7 +348,8 @@ select {
 
 .search-input-wrapper {
   flex: 1;
-  min-width: 250px;
+  min-width: 0;
+  width: 100%;
   position: relative;
 }
 
@@ -1164,17 +1165,8 @@ select {
     min-height: 44px;
   }
 
-  /* Navbar actions: wrap and shrink on mobile */
+  /* Navbar actions: hide entirely on mobile, everything is in hamburger menu */
   .navbar-actions {
-    gap: 0.4rem;
-    flex-shrink: 0;
-  }
-
-  .navbar-search {
-    display: none;
-  }
-
-  .navbar-auth {
     display: none;
   }
 
@@ -1923,15 +1915,18 @@ select {
   border: 1.5px solid var(--color-border);
   border-radius: 20px;
   font-size: 0.8rem;
-  width: 180px;
+  width: 140px;
+  max-width: 40vw;
   background: var(--color-bg);
   transition: all var(--transition);
+  min-width: 0;
 }
 
 .navbar-search-input:focus {
   outline: none;
   border-color: var(--color-primary);
-  width: 240px;
+  width: 180px;
+  max-width: 50vw;
   background: var(--color-surface);
 }
 
