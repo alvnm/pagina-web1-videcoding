@@ -443,6 +443,9 @@ const Components = (() => {
           <button class="mobile-toggle" onclick="App.toggleMobileMenu()" aria-label="Menu">☰</button>
           <ul class="navbar-nav" id="navbar-nav">
             ${navLinks}
+            <li class="navbar-nav-dark-toggle">
+              <button class="dark-toggle-menu" onclick="App.toggleDarkMode()" title="Cambiar tema">🌙 Cambiar tema</button>
+            </li>
             <li class="navbar-nav-auth">
               ${session
                 ? `<a href="#/profile/${session.id}" class="nav-auth-link">👤 Mi Perfil</a>
