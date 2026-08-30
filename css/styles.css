@@ -1165,6 +1165,11 @@ select {
     min-height: 44px;
   }
 
+  .navbar-nav li {
+    list-style: none;
+    width: 100%;
+  }
+
   /* Navbar actions: hide entirely on mobile, everything is in hamburger menu */
   .navbar-actions {
     display: none;
