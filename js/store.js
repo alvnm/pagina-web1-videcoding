@@ -368,28 +368,86 @@ const Store = (() => {
   }
 
   // ---- Supabase Storage ----
-  async function uploadBookFile(file) {
+  // Upload with XHR for real progress tracking (Supabase JS client doesn't support upload progress)
+  function _uploadToSupabaseXHR(filePath, file, contentType) {
+    return new Promise((resolve, reject) => {
+      const url = `${SUPABASE_URL}/storage/v1/object/documentos/${encodeURIComponent(filePath)}`;
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`);
+      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+      xhr.setRequestHeader('x-upsert', 'false');
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          // Dispatch custom event so the UI can update progress
+          window.dispatchEvent(new CustomEvent('upload-progress', { detail: { pct } }));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch {
+            resolve({ Key: filePath });
+          }
+        } else {
+          let errorMsg = 'Error al subir el archivo a Supabase.';
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            errorMsg = errData.message || errData.error || errorMsg;
+          } catch { /* use default */ }
+          if (xhr.status === 413) {
+            errorMsg = 'El archivo supera el límite del bucket en Supabase. Verifica el file_size_limit en el Dashboard.';
+          }
+          reject({ status: xhr.status, message: errorMsg });
+        }
+      };
+
+      xhr.onerror = () => {
+        reject({ status: 0, message: 'Error de red al conectar con Supabase. Verifica tu conexión a internet.' });
+      };
+
+      // 30 min timeout for very large files
+      xhr.timeout = 30 * 60 * 1000;
+      xhr.ontimeout = () => {
+        reject({ status: 0, message: 'La subida tardó demasiado (>30 min). Intenta con un archivo más pequeño o verifica tu velocidad de subida.' });
+      };
+
+      xhr.send(file);
+    });
+  }
+
+  async function uploadBookFile(file, onProgress) {
     // Upload directly from browser to Supabase Storage (avoids Vercel serverless timeout)
-    const ext = file.name.split('.').pop();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `libros/${Date.now()}_${safeName}`;
-    console.log('📤 Uploading directly to Supabase:', filePath, `(${(file.size / 1024).toFixed(0)} KB)`);
+    const contentType = file.type || 'application/octet-stream';
+    console.log('📤 Uploading directly to Supabase:', filePath, `(${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
 
-    const { error } = await supabase
-      .storage
-      .from('documentos')
-      .upload(filePath, file, {
-        contentType: file.type || 'application/octet-stream',
-        upsert: false,
-      });
+    // Listen for real progress events from XHR
+    let progressHandler;
+    if (onProgress) {
+      progressHandler = (e) => onProgress(e.detail.pct);
+      window.addEventListener('upload-progress', progressHandler);
+    }
 
-    if (error) {
-      console.error('❌ Supabase upload error:', error.message, error);
-      let detail = error.message || 'Error desconocido';
-      if (error.statusCode === 413 || detail.includes('maximum')) {
+    try {
+      await _uploadToSupabaseXHR(filePath, file, contentType);
+    } catch (err) {
+      console.error('❌ Supabase upload error:', err.message || err, err);
+      let detail = err.message || 'Error desconocido al subir archivo.';
+      if (err.status === 413 || (detail && detail.includes('maximum'))) {
         detail += '\n💡 Ejecuta el SQL de actualización del bucket en Supabase Dashboard → SQL Editor.';
       }
       throw new Error(detail);
+    } finally {
+      if (progressHandler) {
+        window.removeEventListener('upload-progress', progressHandler);
+      }
     }
 
     const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);

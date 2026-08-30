@@ -786,30 +786,29 @@ const App = (() => {
         if (useProgress) {
           const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
           progressToast = Components.showProgressToast(`📤 Subiendo ${sizeMB} MB...`);
-          // Simulated progress: accelerates quickly then slows down (max ~90%)
-          let pct = 0;
-          const startTime = Date.now();
-          progressTimer = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            // Logarithmic curve: fast start, slows down approaching 90%
-            pct = Math.min(90, 90 * (1 - Math.exp(-elapsed / 8)));
-            Components.updateProgressToast(progressToast, pct);
-          }, 400);
         } else {
           Components.showToast('📤 Subiendo archivo...', 'info');
         }
-        const uploadResult = await Store.uploadBookFile(file);
+        const uploadResult = await Store.uploadBookFile(file, (pct) => {
+          if (progressToast) {
+            Components.updateProgressToast(progressToast, pct);
+          }
+        });
         if (progressTimer) clearInterval(progressTimer);
         if (progressToast) {
-          Components.updateProgressToast(progressToast, 100);
-          setTimeout(() => Components.removeProgressToast(progressToast), 500);
+          Components.updateProgressToast(progressToast, 100, '✅ ¡Archivo subido!');
+          setTimeout(() => Components.removeProgressToast(progressToast), 800);
         }
         fileUrl = uploadResult.file_url || '';
       } catch (uploadErr) {
         if (progressTimer) clearInterval(progressTimer);
-        if (progressToast) Components.removeProgressToast(progressToast);
+        if (progressToast) {
+          Components.updateProgressToast(progressToast, 0, '❌ Error al subir');
+          setTimeout(() => Components.removeProgressToast(progressToast), 2000);
+        }
         console.error('File upload error:', uploadErr);
-        Components.showToast('Error al subir el archivo: ' + (uploadErr.message || uploadErr.error?.message || 'Error desconocido'), 'error');
+        const errMsg = uploadErr.message || uploadErr.error?.message || 'Error desconocido';
+        Components.showToast('Error al subir el archivo: ' + errMsg, 'error');
         return;
       }
     }
