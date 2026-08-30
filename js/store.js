@@ -13,7 +13,7 @@ const Store = (() => {
 
   // ---- Generic fetch helper ----
   const FETCH_TIMEOUT = 15000; // 15 seconds (default)
-  const UPLOAD_TIMEOUT = 300000; // 5 minutes for large file uploads (up to 200 MB)
+  const UPLOAD_TIMEOUT = 300000; // 5 minutes for large file uploads (up to 50 MB)
 
   function _fetchWithTimeout(url, options = {}) {
     const timeout = options._timeout || FETCH_TIMEOUT;

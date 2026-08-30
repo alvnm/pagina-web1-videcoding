@@ -733,7 +733,7 @@ const Components = (() => {
             <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
               <div class="drop-zone-icon">📁</div>
               <p class="drop-zone-text">Arrastra tu archivo aquí o <strong>haz clic para seleccionar</strong></p>
-              <p class="drop-zone-formats">Formatos aceptados: PDF, EPUB, MOBI, DOC, DOCX (máx. 200 MB)</p>
+              <p class="drop-zone-formats">Formatos aceptados: PDF, EPUB, MOBI, DOC, DOCX (máx. 50 MB)</p>
             </div>
             <input type="file" id="file-input" accept=".pdf,.epub,.mobi,.doc,.docx" style="display:none" />
             <div id="file-preview"></div>

@@ -84,7 +84,7 @@ app.use((err, req, res, next) => {
 
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'El archivo excede el límite de 200 MB.' });
+    return res.status(413).json({ error: 'El archivo excede el límite de 50 MB.' });
   }
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({ error: 'Campo de archivo inesperado.' });

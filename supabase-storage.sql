@@ -3,15 +3,15 @@
 -- Ejecutar en: Supabase Dashboard → SQL Editor → Run
 -- ============================================
 
--- 1. Crear el bucket como público (200 MB, PDF/EPUB/imágenes/DOC)
+-- 1. Crear el bucket como público (50 MB, PDF/EPUB/imágenes/DOC)
 --    IMPORTANTE: Usar DO UPDATE para forzar actualización del file_size_limit
---    Si el bucket ya existía con un límite menor, esta SQL lo actualiza a 200 MB.
+--    Si el bucket ya existía con un límite diferente, esta SQL lo actualiza a 50 MB.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'documentos',
   'documentos',
   true,
-  209715200,
+  52428800,
   ARRAY[
     'application/pdf',
     'application/epub+zip',
@@ -24,7 +24,7 @@ VALUES (
   ]
 )
 ON CONFLICT (id) DO UPDATE SET
-  file_size_limit = 209715200,
+  file_size_limit = 52428800,
   allowed_mime_types = ARRAY[
     'application/pdf',
     'application/epub+zip',
