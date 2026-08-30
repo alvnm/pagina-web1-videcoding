@@ -443,11 +443,19 @@ const Components = (() => {
           <button class="mobile-toggle" onclick="App.toggleMobileMenu()" aria-label="Menu">☰</button>
           <ul class="navbar-nav" id="navbar-nav">
             ${navLinks}
+            <li class="navbar-nav-auth">
+              ${session
+                ? `<a href="#/profile/${session.id}" class="nav-auth-link">👤 Mi Perfil</a>
+                   <a href="" onclick="event.preventDefault();App.logout();" class="nav-auth-link">🚪 Salir</a>`
+                : `<a href="#/login" class="nav-auth-link">🔑 Iniciar Sesión</a>
+                   <a href="#/register" class="nav-auth-link nav-auth-register">📝 Registrarse</a>`
+              }
+            </li>
           </ul>
           <div class="navbar-actions">
             ${quickSearch}
             ${darkToggle}
-            ${authActions}
+            <div class="navbar-auth">${authActions}</div>
           </div>
         </div>
       </nav>
