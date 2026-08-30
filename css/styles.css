@@ -1406,6 +1406,8 @@ select {
   /* Auth forms */
   .auth-page {
     padding: 1.5rem;
+    min-height: auto;
+    align-items: flex-start;
   }
 
   .auth-card {
