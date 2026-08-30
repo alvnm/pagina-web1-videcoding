@@ -1170,8 +1170,17 @@ select {
     width: 100%;
   }
 
-  /* Navbar actions: hide entirely on mobile, everything is in hamburger menu */
+  /* Navbar actions on mobile: hide search and auth, keep dark toggle */
   .navbar-actions {
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .navbar-search {
+    display: none;
+  }
+
+  .navbar-auth {
     display: none;
   }
 
