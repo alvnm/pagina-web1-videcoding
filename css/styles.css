@@ -1512,15 +1512,22 @@ select {
 
   .doc-viewer-header {
     padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 
   .doc-viewer-title {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    min-width: 0;
   }
 
   .doc-viewer-btn {
     padding: 0.3rem 0.5rem;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+  }
+
+  .doc-viewer-iframe {
+    -webkit-overflow-scrolling: touch;
   }
 }
 

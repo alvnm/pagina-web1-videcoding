@@ -321,8 +321,16 @@ const App = (() => {
     `;
 
     if (isPDF || ext === '' || !ext) {
-      // Use iframe for PDF or unknown — the server proxy handles Content-Type
-      bodyEl.innerHTML = `<iframe src="${streamUrl}" class="doc-viewer-iframe" title="Visor de documento"></iframe>`;
+      // Detect mobile device
+      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && bookId) {
+        // On mobile, use Google Docs Viewer for PDFs
+        const absoluteUrl = window.location.origin + streamUrl;
+        const gviewUrl = 'https://docs.google.com/gview?url=' + encodeURIComponent(absoluteUrl) + '&embedded=true';
+        bodyEl.innerHTML = `<iframe src="${gviewUrl}" class="doc-viewer-iframe" title="Visor de documento" allowfullscreen></iframe>`;
+      } else {
+        bodyEl.innerHTML = `<iframe src="${streamUrl}" class="doc-viewer-iframe" title="Visor de documento"></iframe>`;
+      }
     } else if (isEPUB) {
       bodyEl.innerHTML = `
         <div class="doc-viewer-fallback">
